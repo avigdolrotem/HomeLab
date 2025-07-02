@@ -32,6 +32,6 @@ module "vaultwarden_instance" {
   security_group_ids         = [module.vaultwarden_sg.security_group_id]
   key_name                   = var.key_name
   associate_public_ip_address = true
-  user_data                  = var.user_data
+  user_data                  = file(var.user_data)
   tags                       = var.tags
 }
