@@ -1,0 +1,24 @@
+services:
+  mailserver:
+    image: docker.io/mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail
+    domainname: avigdol.com
+    env_file: .env
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - maildata:/var/mail
+      - mailstate:/var/mail-state
+      - maillogs:/var/log/mail
+      - /opt/mailserver/config/:/tmp/docker-mailserver/
+    restart: always
+
+volumes:
+  maildata:
+  mailstate:
+  maillogs:

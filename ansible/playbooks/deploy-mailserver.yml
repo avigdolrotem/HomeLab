@@ -1,0 +1,5 @@
+- name: Deploy Docker Mailserver
+  hosts: mailserver
+  become: yes
+  roles:
+    - mailserver

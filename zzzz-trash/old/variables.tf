@@ -154,3 +154,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "route53_zone_id" {
+  description = "The ID of the Route53 hosted zone to manage DNS records for your domain (e.g. avigdol.com)."
+  type        = string
+}
