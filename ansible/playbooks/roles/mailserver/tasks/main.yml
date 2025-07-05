@@ -1,0 +1,28 @@
+- name: Ensure config directory exists
+  file:
+    path: /opt/mailserver/config
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Copy docker-compose.yml
+  copy:
+    src: ../files/docker-compose.yml
+    dest: /opt/mailserver/docker-compose.yml
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy .env
+  copy:
+    src: ../files/.env
+    dest: /opt/mailserver/.env
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Start Docker Mailserver
+  shell: docker compose up -d
+  args:
+    chdir: /opt/mailserver
