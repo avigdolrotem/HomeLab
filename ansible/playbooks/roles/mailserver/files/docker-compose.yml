@@ -7,10 +7,10 @@ services:
     env_file: .env
     environment:
     - SSL_TYPE=letsencrypt
-    - RELAY_HOST=email-smtp.eu-central-1.amazonaws.com
-    - RELAY_PORT=587
-    - RELAY_USER=AKIA4XM3LFJ4KFSTHMQU
-    - RELAY_PASSWORD=AjXJxBhnS9mVWPT9rU2WxPPtz/EcChSP4+XVodTyYXOA
+    - RELAY_HOST=email-smtp.eu-central-1.amazonaws.com  #Check for your relay host
+    - RELAY_PORT=587 # Default
+    - RELAY_USER= user
+    - RELAY_PASSWORD= passwords # need to run aws script-https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html
     # More information about the mail-server ports:
     # https://docker-mailserver.github.io/docker-mailserver/latest/config/security/understanding-the-ports/
     ports:

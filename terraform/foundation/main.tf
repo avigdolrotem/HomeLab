@@ -1,10 +1,10 @@
 terraform {
   backend "s3" {
-    bucket         = "homelab-874888505976"
+    bucket         = "your-bucket"
     key            = "tfstate/foundation/terraform.tfstate"
     region         = "eu-central-1"
     encrypt        = true
-    dynamodb_table = "homelab-874888505976"
+    dynamodb_table = "your-db-table" #for tflock
   }
 }
 
@@ -23,7 +23,7 @@ resource "aws_route53_record" "mx_root" {
   name    = ""
   type    = "MX"
   ttl     = 300
-  records = ["10 mail.avigdol.com."]
+  records = ["10 mail.your-domain.com."]
   lifecycle { prevent_destroy = true }
 }
 
@@ -38,7 +38,7 @@ resource "aws_route53_record" "spf" {
 
 # --- SES Identity & DKIM ---
 resource "aws_ses_domain_identity" "this" {
-  domain = "avigdol.com"
+  domain = "your-domain.com"
   lifecycle { prevent_destroy = true }
 }
 

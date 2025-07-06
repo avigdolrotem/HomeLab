@@ -1,5 +1,4 @@
 # --- Outputs for use in disposable layer ---
-# output "mail_backup_bucket_name" { value = aws_s3_bucket.mail_backup.bucket }
 output "mailserver_instance_profile_name" { value = aws_iam_instance_profile.mailserver.name }
 output "mail_backup_bucket_name" {
   value = var.mail_backup_bucket_name

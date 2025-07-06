@@ -1,7 +1,7 @@
 data "terraform_remote_state" "foundation" {
   backend = "s3"
   config = {
-    bucket = "homelab-874888505976"
+    bucket = "your-bucket"
     key    = "tfstate/foundation/terraform.tfstate"
     region = "eu-central-1"
   }
