@@ -3,7 +3,7 @@
 set -e
 
 # Get the EC2 public IP from disposable outputs
-EC2_IP=$(terraform -chdir=terraform/disposable output -raw mailserver_public_ip)
+EC2_IP=$(terraform -chdir=terraform/mailserver/disposable output -raw mailserver_public_ip)
 
 # Set your Route53 hosted zone ID and record name
 ZONE_ID="your-route53-zone-id"

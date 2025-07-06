@@ -1,14 +1,14 @@
 terraform {
   backend "s3" {
-    bucket         = "homelab-874888505976"
+    bucket         = "your-bucket"
     key            = "tfstate/disposable/terraform.tfstate"
     region         = "eu-central-1"
     encrypt        = true
-    dynamodb_table = "homelab-874888505976"
+    dynamodb_table = "your-db-table"
   }
 }
 module "vpc" {
-  source            = "../modules/vpc"
+  source            = "../../modules/vpc"
   vpc_cidr_block    = var.vpc_cidr_block
   vpc_name          = var.vpc_name
   subnet_cidr_block = var.subnet_cidr_block
@@ -23,7 +23,7 @@ module "vpc" {
 }
 
 module "mailserver_sg" {
-  source         = "../modules/security_group"
+  source         = "../../modules/security_group"
   name           = var.sg_name
   description    = var.sg_description
   vpc_id         = module.vpc.vpc_id
@@ -34,7 +34,7 @@ module "mailserver_sg" {
 
 
 module "mailserver_instance" {
-  source                     = "../modules/ec2"
+  source                     = "../../modules/ec2"
   name                       = var.instance_name
   ami                        = var.ami
   instance_type              = var.instance_type
