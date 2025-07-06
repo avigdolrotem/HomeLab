@@ -218,12 +218,6 @@
   when: item.rc != 0
   with_items: "{{ mailuser_exists.results }}"
 
-# - name: Create mail users
-#   shell: docker compose exec -T mailserver setup email add {{ item.email }} {{ item.password }}
-#   args:
-#     chdir: /opt/mailserver
-#   loop: "{{ users }}"
-
 - name: Sync data to S3
   shell: |
     tar czf /tmp/backup.tar.gz -C /opt/mailserver maildata config
