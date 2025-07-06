@@ -1,0 +1,17 @@
+s3_bucket: your-bucket
+certbot_email: your@mail.com # for receiving updates regarding certification 
+domain: mail.your-domain.com
+letsencrypt_dir: /etc/letsencrypt
+mailserver_data_dir: /opt/mailserver/maildata
+mailserver_config_dir: /opt/mailserver/config
+mailserver_env_file: /opt/mailserver/.env
+mailserver_compose_file: /opt/mailserver/docker-compose.yml
+
+# S3 backup object key (for subfolders, e.g. 'mailserver/backup.tar.gz')
+s3_backup_object: mailserver/backup.tar.gz
+
+users:
+  - email: junk@your-domain.com # will be used to catch-all
+    password: "JunkMailPassword123!"
+  - email: user@your-domain.com
+    password: "YourSuperSecret!123"

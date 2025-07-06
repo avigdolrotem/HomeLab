@@ -1,0 +1,8 @@
+- name: Deploy Docker Mailserver
+  hosts: mailservers
+  become: true
+  vars_files:
+    - ../group_vars/all.yaml
+
+  roles:
+    - mailserver

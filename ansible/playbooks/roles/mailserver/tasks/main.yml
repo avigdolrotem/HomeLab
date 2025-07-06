@@ -1,0 +1,224 @@
+- name: Install AWS CLI v2 using official installer
+  block:
+  - name: Install prerequisites
+    apt:
+      name:
+        - curl
+        - unzip
+      state: present
+      update_cache: yes
+
+- name: Download AWS CLI v2
+  get_url:
+    url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+    dest: /tmp/awscliv2.zip
+    mode: '0644'
+
+- name: Unzip AWS CLI v2
+  unarchive:
+    src: /tmp/awscliv2.zip
+    dest: /tmp
+    remote_src: yes
+
+- name: Install AWS CLI v2
+  command: /tmp/aws/install
+  args:
+    creates: /usr/local/bin/aws
+
+- name: Create symlink for aws command (if needed)
+  file:
+    src: /usr/local/bin/aws
+    dest: /usr/bin/aws
+    state: link
+  ignore_errors: yes
+
+- name: Clean up downloaded files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/awscliv2.zip
+    - /tmp/aws
+
+- name: Verify AWS CLI installation
+  command: aws --version
+  register: aws_version
+  changed_when: false
+
+
+
+######################
+- name: Install apt dependencies
+  apt:
+    name:
+      - python3-pip
+      - certbot
+    state: present
+    update_cache: yes
+
+- name: Update apt package cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+- name: Install required packages for Docker repository
+  apt:
+    name:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - software-properties-common
+    - gnupg
+    - lsb-release
+    state: present
+
+- name: Create directory for Docker GPG key
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    keyring: /etc/apt/keyrings/docker.gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    update_cache: yes
+
+- name: Install Docker packages
+  apt:
+    name:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+    - docker-buildx-plugin
+    - docker-compose-plugin
+    state: present
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add users to docker group
+  user:
+    name: "{{ item }}"
+    groups: docker
+    append: yes
+  loop: "{{ docker_users }}"
+  when: docker_users is defined
+
+- name: Verify Docker installation
+  command: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Ensure mailserver directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop:
+    - "{{ mailserver_data_dir }}"
+    - "{{ mailserver_config_dir }}"
+    - "{{ letsencrypt_dir }}"
+
+- name: Try to restore from S3 backup
+  aws_s3:
+    bucket: "{{ s3_bucket }}"
+    object: "{{ s3_backup_object | default('backup.tar.gz') }}"
+    dest: "/tmp/backup.tar.gz"
+    mode: get
+  register: s3_restore
+  ignore_errors: true
+
+- name: Extract backup if found
+  unarchive:
+    src: /tmp/backup.tar.gz
+    dest: /opt/mailserver/
+    remote_src: yes
+  when: s3_restore is defined and s3_restore.failed is not defined and s3_restore.changed
+
+- name: Copy docker compose.yml
+  copy:
+    src: docker-compose.yml
+    dest: "{{ mailserver_compose_file }}"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy .env
+  copy:
+    src: .env
+    dest: "{{ mailserver_env_file }}"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Get Let's Encrypt certificate using Certbot
+  shell: |
+    certbot certonly --standalone --non-interactive --agree-tos --email {{ certbot_email }} -d {{ domain }}
+  args:
+    creates: "{{ letsencrypt_dir }}/live/{{ domain }}/fullchain.pem"
+
+- name: Wait 5 seconds for certs to settle (just in case)
+  wait_for:
+    timeout: 5
+
+- name: Copy certbot_renew.sh script to server
+  copy:
+    src: ../../../../../scripts/certbot_renew.sh
+    dest: /usr/local/bin/certbot_renew.sh
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create weekly cron job for certbot renew
+  cron:
+    name: "Renew Let's Encrypt certs weekly"
+    job: "/usr/local/bin/certbot_renew.sh"
+    user: root
+    weekday: 0
+    hour: 2
+    minute: 0
+
+- name: Start Docker Mailserver
+  shell: docker compose up -d
+  args:
+    chdir: /opt/mailserver
+
+- name: Wait for mailserver container
+  shell: docker compose ps | grep mailserver | grep Up
+  args:
+    chdir: /opt/mailserver
+  register: mailserver_status
+  retries: 5
+  delay: 5
+  until: mailserver_status.rc == 0
+
+- name: Check if mail user exists
+  shell: docker compose exec -T mailserver setup email list | grep -q {{ item.email }}
+  args:
+    chdir: /opt/mailserver
+  register: mailuser_exists
+  ignore_errors: true
+  with_items: "{{ users }}"
+
+- name: Create mail user if it doesn't exist
+  shell: docker compose exec -T mailserver setup email add {{ item.item.email }} {{ item.item.password }}
+  args:
+    chdir: /opt/mailserver
+  when: item.rc != 0
+  with_items: "{{ mailuser_exists.results }}"
+
+- name: Sync data to S3
+  shell: |
+    tar czf /tmp/backup.tar.gz -C /opt/mailserver maildata config
+    aws s3 cp /tmp/backup.tar.gz s3://{{ s3_bucket }}/{{ s3_backup_object | default('backup.tar.gz') }}
