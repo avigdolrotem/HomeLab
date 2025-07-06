@@ -1,0 +1,17 @@
+s3_bucket: homelab-874888505976
+certbot_email: avigdolrotem@gmail.com
+domain: mail.avigdol.com
+letsencrypt_dir: /etc/letsencrypt
+mailserver_data_dir: /opt/mailserver/maildata
+mailserver_config_dir: /opt/mailserver/config
+mailserver_env_file: /opt/mailserver/.env
+mailserver_compose_file: /opt/mailserver/docker-compose.yml
+
+# S3 backup object key (for subfolders, e.g. 'mailserver/backup.tar.gz')
+s3_backup_object: mailserver/backup.tar.gz
+
+users:
+  - email: junk@avigdol.com
+    password: "JunkMailPassword123!"
+  - email: rotem@avigdol.com
+    password: "RotemSuperSecret!123"

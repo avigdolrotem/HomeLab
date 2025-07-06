@@ -4,7 +4,7 @@ services:
     container_name: mailserver
     # Provide the FQDN of your mail server here (Your DNS MX record should point to this value)
     hostname: mail.avigdol.com
-    env_file: mailserver.env
+    env_file: .env
     environment:
     - SSL_TYPE=letsencrypt
     - RELAY_HOST=email-smtp.eu-central-1.amazonaws.com
