@@ -22,9 +22,9 @@ This project documents my journey building a personal HomeLab on AWS. The goal i
 
 ## 🚩 Milestones
 
+- [V] Custom mailbox
 - [ ] Password manager (Vaultwarden)
 - [ ] Cloud backup for photos/files
-- [ ] Custom mailbox
 - [ ] (Planned) Remote code editor (VS Code Server)
 - [ ] (More to come)
 

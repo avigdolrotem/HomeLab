@@ -65,12 +65,11 @@ variable "enable_dns_support" {
 variable "sg_name" {
   description = "Security group name"
   type        = string
-  default     = "vaultwarden-sg"
+  default     = "mailserver-sg"
 }
 variable "sg_description" {
   description = "Security group description"
   type        = string
-  default     = "Allow SSH, HTTP, and HTTPS for Vaultwarden"
 }
 variable "ingress_rules" {
   description = "List of ingress rules"
@@ -81,30 +80,8 @@ variable "ingress_rules" {
     protocol    = string
     cidr_blocks = list(string)
   }))
-  default = [
-    {
-      description = "SSH"
-      from_port   = 22
-      to_port     = 22
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    },
-    {
-      description = "HTTP"
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    },
-    {
-      description = "HTTPS"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    }
-  ]
 }
+
 variable "egress_rules" {
   description = "List of egress rules"
   type = list(object({
@@ -127,7 +104,7 @@ variable "egress_rules" {
 variable "instance_name" {
   description = "EC2 instance name"
   type        = string
-  default     = "vaultwarden"
+  default     = "mailserver"
 }
 variable "ami" {
   description = "AMI ID for EC2 instance"
@@ -136,7 +113,7 @@ variable "ami" {
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t3.micro"
+  default     = "t2.micro"
 }
 variable "key_name" {
   description = "EC2 SSH key pair name"

@@ -1,3 +1,5 @@
+route53_zone_id         = "your-route53-zone-id"
+
 # AWS Provider settings
 region  = "eu-central-1"
 profile = "your-profile"
@@ -84,4 +86,3 @@ tags = {
   "Environment" = ""
   "Project"     = "Mailserver"
 }
-route53_zone_id         = "your-route53-zone-id"
