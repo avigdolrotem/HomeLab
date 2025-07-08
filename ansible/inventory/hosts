@@ -1,2 +1,4 @@
 [mailservers]
 mail.your-domain.com ansible_user=ubuntu ansible_ssh_private_key_file=path_to_ssh_key
+[vaultwarden]
+passwords.avigdol.com ansible_user=ubuntu ansible_ssh_private_key_file=/home/rotem/.ssh/homelab-ec2-key.pem
