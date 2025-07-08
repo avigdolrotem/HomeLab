@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket         = "your-bucket"
-    key            = "tfstate/foundation/terraform.tfstate"
+    key            = "tfstate/mailserver/foundation.tfstate"
     region         = "eu-central-1"
     encrypt        = true
     dynamodb_table = "your-db-table" #for tflock

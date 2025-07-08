@@ -1,5 +1,5 @@
 variable "route53_zone_id" {
-  description = "The Route 53 hosted zone ID for avigdol.com"
+  description = "The Route 53 hosted zone ID for your-domain.com"
   type        = string
 }
 variable "mail_backup_bucket_name" {
