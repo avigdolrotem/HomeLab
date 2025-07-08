@@ -1,0 +1,6 @@
+vaultwarden_db_host: "{{ lookup('env','VW_DB_HOST') | default('your-db-endpoint') }}"
+vaultwarden_db_name: "{{ lookup('env','VW_DB_NAME') | default('vaultwarden') }}"
+vaultwarden_db_user: "{{ lookup('env','VW_DB_USER') | default('vwuser') }}"
+vaultwarden_db_pass: "{{ lookup('env','VW_DB_PASS') | default('changeme') }}"
+vaultwarden_s3_bucket: "{{ lookup('env','VW_S3_BUCKET') | default('homelab-874888505976') }}"
+vaultwarden_s3_prefix: "{{ lookup('env','VW_S3_PREFIX') | default('vaultwarden/') }}"
