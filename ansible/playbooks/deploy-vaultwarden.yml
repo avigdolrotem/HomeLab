@@ -1,0 +1,8 @@
+- name: Deploy Docker Vaultwarden
+  hosts: vaultwarden
+  become: true
+  vars_files:
+    - ../group_vars/vaultwarden.yaml
+
+  roles:
+    - vaultwarden
