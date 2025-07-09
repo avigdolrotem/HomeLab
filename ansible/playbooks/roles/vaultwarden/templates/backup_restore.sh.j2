@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+ACTION=$1
+
+export AWS_DEFAULT_REGION="{{ aws_region }}"
+export AWS_BUCKET="{{ s3_bucket }}"
+export AWS_PREFIX="{{ s3_prefix }}"
+export VAULTWARDEN_DATA="/opt/vaultwarden/data"
+
+function backup() {
+  echo "Starting Vaultwarden backup to S3..."
+  aws s3 sync "$VAULTWARDEN_DATA" "s3://$AWS_BUCKET/$AWS_PREFIX"
+}
+
+function restore() {
+  echo "Checking for existing Vaultwarden backup in S3..."
+  aws s3 ls "s3://$AWS_BUCKET/$AWS_PREFIX" | grep -q .
+  if [ $? -eq 0 ]; then
+    echo "Restoring Vaultwarden data from S3..."
+    aws s3 sync "s3://$AWS_BUCKET/$AWS_PREFIX" "$VAULTWARDEN_DATA"
+  else
+    echo "No backup found in S3. Skipping restore."
+  fi
+}
+
+case "$ACTION" in
+  backup)
+    backup
+    ;;
+  restore)
+    restore
+    ;;
+  *)
+    echo "Usage: $0 [backup|restore]"
+    exit 1
+    ;;
+esac

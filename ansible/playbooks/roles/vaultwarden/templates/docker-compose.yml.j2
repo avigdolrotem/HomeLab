@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      DOMAIN: "https://{{ vaultwarden_domain }}"
+      DATABASE_URL: "mysql://{{ db_username }}:{{ db_password }}@{{ db_endpoint }}:3306/{{ db_name }}"
+      # Some Recommended Vaultwarden Settings
+      SIGNUPS_ALLOWED: "false"            # Prevent public registrations
+      INVITATIONS_ALLOWED: "false"        # If you don't want to invite others
+      PASSWORD_ITERATIONS: "600000"       # Increase password hash strength
+      DISABLE_ADMIN_TOKEN: "true"         # No admin console
+      ROCKET_WORKERS: "10"                # Tweak for small VPS (default 10)
+      WEBSOCKET_ENABLED: "true"           # For Bitwarden clients
+      SHOW_PASSWORD_HINT: "false"         # Prevent password hint leaks
+      SENDS_ALLOWED: "false"              # Disable file transfers (unless you want them)
+    volumes:
+      - vaultwarden-data:/data
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - vaultwarden
+    networks:
+      - web
+
+volumes:
+  vaultwarden-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  web:
+    driver: bridge

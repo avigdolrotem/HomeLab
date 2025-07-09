@@ -1,52 +1,65 @@
-- name: Install required apt packages
+- name: Update apt cache and install dependencies
   apt:
     name:
       - apt-transport-https
       - ca-certificates
       - curl
-      - gnupg
-      - lsb-release
-    state: present
+      - software-properties-common
+      - unzip
     update_cache: yes
+    state: present
 
 - name: Add Docker GPG key
   apt_key:
     url: https://download.docker.com/linux/ubuntu/gpg
     state: present
 
-- name: Add Docker repository
+- name: Add Docker repo
   apt_repository:
-    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
     state: present
 
-- name: Install Docker and Docker Compose
+- name: Install Docker
   apt:
     name:
       - docker-ce
       - docker-ce-cli
       - containerd.io
       - docker-compose-plugin
-    state: present
     update_cache: yes
+    state: present
 
-- name: Ensure Docker service is running
-  service:
-    name: docker
-    state: started
-    enabled: true
+- name: Add ubuntu user to docker group
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
 
-- name: Create Vaultwarden app folder
+- name: Ensure /opt/vaultwarden exists
   file:
     path: /opt/vaultwarden
     state: directory
+    owner: ubuntu
+    group: ubuntu
 
-- name: Template Docker Compose file
+- name: Template docker-compose.yml
   template:
     src: docker-compose.yml.j2
     dest: /opt/vaultwarden/docker-compose.yml
-    mode: '0644'
+    owner: ubuntu
+    group: ubuntu
+    mode: 0644
 
-- name: Start Vaultwarden with Docker Compose
-  shell: docker compose up -d
+- name: Template Caddyfile
+  template:
+    src: Caddyfile.j2
+    dest: /opt/vaultwarden/Caddyfile
+    owner: ubuntu
+    group: ubuntu
+    mode: 0644
+
+- name: Start Vaultwarden and Caddy (using docker compose v2)
+  shell: |
+    docker compose -f /opt/vaultwarden/docker-compose.yml up -d
   args:
     chdir: /opt/vaultwarden

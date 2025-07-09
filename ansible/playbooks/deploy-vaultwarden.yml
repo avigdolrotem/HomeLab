@@ -1,8 +1,7 @@
-- name: Deploy Docker Vaultwarden
+- name: Deploy Vaultwarden and Caddy with Docker
   hosts: vaultwarden
-  become: true
+  become: yes
   vars_files:
     - ../group_vars/vaultwarden.yaml
-
   roles:
     - vaultwarden

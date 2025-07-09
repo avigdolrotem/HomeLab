@@ -1,6 +1,46 @@
-vaultwarden_db_host: "{{ lookup('env','VW_DB_HOST') | default('your-db-endpoint') }}"
-vaultwarden_db_name: "{{ lookup('env','VW_DB_NAME') | default('vaultwarden') }}"
-vaultwarden_db_user: "{{ lookup('env','VW_DB_USER') | default('vwuser') }}"
-vaultwarden_db_pass: "{{ lookup('env','VW_DB_PASS') | default('changeme') }}"
-vaultwarden_s3_bucket: "{{ lookup('env','VW_S3_BUCKET') | default('homelab-874888505976') }}"
-vaultwarden_s3_prefix: "{{ lookup('env','VW_S3_PREFIX') | default('vaultwarden/') }}"
+# vaultwarden_db_host: "{{ lookup('env','VW_DB_HOST') | default('your-db-endpoint') }}"
+# vaultwarden_db_name: "{{ lookup('env','VW_DB_NAME') | default('vaultwarden') }}"
+# vaultwarden_db_user: "{{ lookup('env','VW_DB_USER') | default('vwuser') }}"
+# vaultwarden_db_pass: "{{ lookup('env','VW_DB_PASS') | default('changeme') }}"
+# vaultwarden_s3_bucket: "{{ lookup('env','VW_S3_BUCKET') | default('homelab-874888505976') }}"
+# vaultwarden_s3_prefix: "{{ lookup('env','VW_S3_PREFIX') | default('vaultwarden/') }}"
+# terraform -chdir=../terraform/vaultwarden/foundation output -json \
+#   | jq -r '
+#       to_entries | 
+#       map("\(.key): \"\(.value.value)\"") | 
+#       .[]' > ansible/group_vars/all.yaml
+
+# vaultwarden_domain: "passwords.avigdol.com"
+# db_username: "vwuser"
+# db_password: "YOUR_DB_PASSWORD"
+# db_endpoint: "YOUR_RDS_ENDPOINT"
+# db_name: "vaultwarden"
+
+# aws_region: "eu-central-1"
+# email: "you@example.com"          # For Let's Encrypt
+
+vaultwarden_domain: "passwords.avigdol.com"
+aws_region: "eu-central-1"
+db_endpoint: "vaultwarden-db.clg6aey28a96.eu-central-1.rds.amazonaws.com"
+db_address: "vaultwarden-db.clg6aey28a96.eu-central-1.rds.amazonaws.com"
+db_name: "vaultwarden"
+db_password: "DXSbJ8Ezy8+Cksu4lyHv"
+db_username: "vwuser"
+subnet_id: "subnet-0488a1d2dff09317c"
+vaultwarden_backup_bucket_name: "homelab-874888505976"
+vaultwarden_backup_bucket_prefix: "vaultwarden/"
+vaultwarden_instance_profile_name: "vaultwarden-instance-profile"
+vaultwarden_sg_id: "sg-074244e8be0f19f22"
+
+email: "you@example.com"          # For Let's Encrypt
+s3_bucket: "homelab-874888505976"
+s3_prefix: "vaultwarden/"
+# db_address: "vaultwarden-db.clg6aey28a96.eu-central-1.rds.amazonaws.com"
+# db_name: "vaultwarden"
+# db_password: "DXSbJ8Ezy8+Cksu4lyHv"
+# db_username: "vwuser"
+# subnet_id: "subnet-0488a1d2dff09317c"
+# vaultwarden_backup_bucket_name: "homelab-874888505976"
+# vaultwarden_backup_bucket_prefix: "vaultwarden/"
+# vaultwarden_instance_profile_name: "vaultwarden-instance-profile"
+# vaultwarden_sg_id: "sg-074244e8be0f19f22"
