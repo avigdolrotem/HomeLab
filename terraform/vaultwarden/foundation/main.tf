@@ -5,6 +5,10 @@ terraform {
     region         = "eu-central-1"
     encrypt        = true
     dynamodb_table = "homelab-874888505976"
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -132,15 +136,6 @@ resource "aws_db_instance" "vaultwarden" {
   tags                   = var.tags
 }
 
-resource "aws_route53_record" "passwords_a" {
-  zone_id = var.route53_zone_id
-  name    = "passwords"
-  type    = "A"
-  ttl     = 300
-  records = [var.placeholder_ip]
-  # lifecycle { prevent_destroy = true }
-}
-
 resource "aws_iam_role" "vaultwarden_ec2" {
   name = "vaultwarden-ec2-role"
   assume_role_policy = jsonencode({
@@ -181,4 +176,126 @@ resource "aws_iam_role_policy_attachment" "vaultwarden_s3_attach" {
 resource "aws_iam_instance_profile" "vaultwarden" {
   name = "vaultwarden-instance-profile"
   role = aws_iam_role.vaultwarden_ec2.name
+}
+
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda_dns_update" {
+  name = "lambda_dns_update_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "lambda.amazonaws.com" },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+# IAM Policy for Lambda
+resource "aws_iam_policy" "lambda_dns_update_policy" {
+  name        = "lambda_dns_update_policy"
+  description = "Allow Lambda to update Route53 and describe EC2"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ec2:DescribeInstances"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "route53:ChangeResourceRecordSets",
+          "route53:GetChange"
+        ],
+        Resource = "arn:aws:route53:::hostedzone/${var.route53_zone_id}"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "route53:ListHostedZones",
+          "route53:ListResourceRecordSets"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach policy to role
+resource "aws_iam_role_policy_attachment" "lambda_dns_update_attach" {
+  role       = aws_iam_role.lambda_dns_update.name
+  policy_arn = aws_iam_policy.lambda_dns_update_policy.arn
+}
+
+# Create Lambda function first
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../../../lambda/update_dns_lambda.py"
+  output_path = "${path.module}/../../../lambda/update_dns_lambda.zip"
+}
+
+resource "aws_lambda_function" "update_dns" {
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "update_dns_lambda"
+  role            = aws_iam_role.lambda_dns_update.arn
+  handler         = "update_dns_lambda.lambda_handler"
+  runtime         = "python3.12"
+  timeout         = 60
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_dns_update_attach
+  ]
+}
+
+# Create CloudWatch Log Group (import existing if needed)
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/update_dns_lambda"
+  retention_in_days = 14
+  
+  lifecycle {
+    ignore_changes = [name]
+  }
+}
+
+# EventBridge Rule (fixed JSON syntax)
+resource "aws_cloudwatch_event_rule" "ec2_running" {
+  name        = "ec2_instance_running_rule"
+  description = "Trigger Lambda when an EC2 instance enters running state"
+  
+  event_pattern = jsonencode({
+    source        = ["aws.ec2"]
+    detail-type   = ["EC2 Instance State-change Notification"]
+    detail = {
+      state = ["running"]
+    }
+  })
+}
+
+# Lambda permission for EventBridge
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.update_dns.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.ec2_running.arn
+}
+
+# EventBridge Target
+resource "aws_cloudwatch_event_target" "ec2_running_lambda" {
+  rule      = aws_cloudwatch_event_rule.ec2_running.name
+  target_id = "update_dns_lambda"
+  arn       = aws_lambda_function.update_dns.arn
 }

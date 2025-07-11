@@ -58,7 +58,7 @@
     group: ubuntu
     mode: 0644
 
-- name: Start Vaultwarden and Caddy (using docker compose v2)
+- name: Start Vaultwarden and Caddy
   shell: |
     docker compose -f /opt/vaultwarden/docker-compose.yml up -d
   args:
