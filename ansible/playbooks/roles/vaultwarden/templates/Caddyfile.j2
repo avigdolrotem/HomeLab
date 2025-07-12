@@ -1,0 +1,5 @@
+{{ vaultwarden_domain }} {
+    reverse_proxy vaultwarden:80
+    encode gzip
+    tls {{ email }}
+}

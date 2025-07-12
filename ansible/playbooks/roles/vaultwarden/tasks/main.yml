@@ -1,0 +1,65 @@
+- name: Update apt cache and install dependencies
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - software-properties-common
+      - unzip
+    update_cache: yes
+    state: present
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repo
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install Docker
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    update_cache: yes
+    state: present
+
+- name: Add ubuntu user to docker group
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
+
+- name: Ensure /opt/vaultwarden exists
+  file:
+    path: /opt/vaultwarden
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+
+- name: Template docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/vaultwarden/docker-compose.yml
+    owner: ubuntu
+    group: ubuntu
+    mode: 0644
+
+- name: Template Caddyfile
+  template:
+    src: Caddyfile.j2
+    dest: /opt/vaultwarden/Caddyfile
+    owner: ubuntu
+    group: ubuntu
+    mode: 0644
+
+- name: Start Vaultwarden and Caddy
+  shell: |
+    docker compose -f /opt/vaultwarden/docker-compose.yml up -d
+  args:
+    chdir: /opt/vaultwarden

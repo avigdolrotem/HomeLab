@@ -2,7 +2,7 @@ data "terraform_remote_state" "foundation" {
   backend = "s3"
   config = {
     bucket = "your-bucket"
-    key    = "tfstate/foundation/terraform.tfstate"
+    key    = "tfstate/mailserver/foundation.tfstate"
     region = "eu-central-1"
   }
 }
