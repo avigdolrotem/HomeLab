@@ -13,7 +13,7 @@ volumes:
   mailserver-logs:
   prometheus-data:
   grafana-data:
-
+  jenkins-data:
 services:
   # Reverse Proxy with automatic SSL
   traefik:

@@ -100,14 +100,13 @@ module "lambda_scheduler" {
   stop_schedule  = "cron(0 18 * * ? *)" # 8 PM Israel = 6 PM UTC
 }
 
-# Add to main.tf
-resource "aws_route53_zone" "main" {
-  name = "avigdol.com"
+# resource "aws_route53_zone" "main" {  # Uncomment if you want to create a Route 53 zone
+#   name = "avigdol.com"
   
-  tags = {
-    Name = "${var.project_name}-${var.environment}-zone"
-  }
-}
+#   tags = {
+#     Name = "${var.project_name}-${var.environment}-zone"
+#   }
+# }
 
 # Create A records for subdomains
 resource "aws_route53_record" "subdomains" {
@@ -119,7 +118,7 @@ resource "aws_route53_record" "subdomains" {
     "jenkins"
   ])
   
-  zone_id = aws_route53_zone.main.zone_id
+  zone_id = "Z03200893DL2ZD0J62J86" #aws_route53_zone.main.id  # Uncomment if you create a Route 53 zone  
   name    = "${each.value}.avigdol.com"
   type    = "A"
   ttl     = 300
