@@ -37,3 +37,25 @@ output "iam_role_name" {
   description = "Name of the IAM role"
   value       = module.iam.role_name
 }
+output "key_name" {
+  description = "AWS key pair name"
+  value       = var.key_name
+
+}
+
+output "domain_records" {
+  description = "Created DNS records"
+  value = {
+    for k, v in aws_route53_record.subdomains : k => "${v.name} -> ${join(", ", v.records)}"
+  }
+}
+
+output "ssh_command" {
+  description = "SSH command to connect to the instance"
+  value       = "ssh -i ~/.ssh/${var.key_name}.pem ec2-user@${module.ec2.public_ip}"
+}
+
+output "health_check_command" {
+  description = "Command to run health check on the instance"
+  value       = "ssh -i ~/.ssh/${var.key_name}.pem ec2-user@${module.ec2.public_ip} './health-check.sh'"
+}

@@ -1,16 +1,16 @@
 terraform {
   backend "s3" {
-    bucket         = "homelab-terraform-state-874888505976"
-    key            = "dev/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "homelab-terraform-locks"
-    encrypt        = true
+    bucket       = "homelab-terraform-state-874888505976"
+    key          = "dev/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = "HomeLab"
@@ -31,9 +31,9 @@ data "aws_availability_zones" "available" {
 # VPC Module
 module "vpc" {
   source = "../../modules/vpc"
-  
-  project_name        = var.project_name
-  environment         = var.environment
+
+  project_name       = var.project_name
+  environment        = var.environment
   vpc_cidr           = var.vpc_cidr
   public_subnet_cidr = var.public_subnet_cidr
   availability_zone  = data.aws_availability_zones.available.names[0]
@@ -42,11 +42,11 @@ module "vpc" {
 # Security Group Module
 module "security_group" {
   source = "../../modules/security-group"
-  
+
   project_name = var.project_name
   environment  = var.environment
   vpc_id       = module.vpc.vpc_id
-  
+
   # Allow your home IP (replace with your actual IP)
   allowed_cidr_blocks = var.allowed_cidr_blocks
 }
@@ -54,47 +54,62 @@ module "security_group" {
 # IAM Module
 module "iam" {
   source = "../../modules/iam"
-  
-  project_name = var.project_name
-  environment  = var.environment
+
+  project_name   = var.project_name
+  environment    = var.environment
   s3_bucket_name = var.s3_bucket_name
 }
 
 # S3 Module
 module "s3" {
   source = "../../modules/s3"
-  
+
   project_name = var.project_name
   environment  = var.environment
   bucket_name  = var.s3_bucket_name
 }
 
+data "aws_route53_zone" "main" {
+  name = var.domain_name
+}
+
+resource "aws_route53_record" "subdomains" {
+  for_each = toset(["passwords", "mail", "files", "monitor", "jenkins", "traefik"])
+
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "${each.value}.${var.domain_name}"
+  type    = "A"
+  ttl     = 300
+  records = [module.ec2.public_ip]
+}
+
 # EC2 Module
 module "ec2" {
   source = "../../modules/ec2"
-  
-  project_name           = var.project_name
-  environment            = var.environment
-  instance_type          = var.instance_type
-  key_name              = var.key_name
-  subnet_id             = module.vpc.public_subnet_id
-  security_group_ids    = [module.security_group.security_group_id]
-  iam_instance_profile  = module.iam.instance_profile_name
-  
+
+  project_name         = var.project_name
+  environment          = var.environment
+  instance_type        = var.instance_type
+  key_name             = var.key_name
+  subnet_id            = module.vpc.public_subnet_id
+  security_group_ids   = [module.security_group.security_group_id]
+  iam_instance_profile = module.iam.instance_profile_name
+
   # User data script for initial setup
-  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user-data.sh", {
     s3_bucket_name = var.s3_bucket_name
+    domain_name    = var.domain_name
   }))
 }
 
 # Lambda Scheduler Module (for auto start/stop)
 module "lambda_scheduler" {
   source = "../../modules/lambda-scheduler"
-  
+
   project_name = var.project_name
   environment  = var.environment
   instance_id  = module.ec2.instance_id
-  
+
   # Schedule: Start at 8 AM, Stop at 8 PM (Israel time)
   start_schedule = "cron(0 6 * * ? *)"  # 8 AM Israel = 6 AM UTC
   stop_schedule  = "cron(0 18 * * ? *)" # 8 PM Israel = 6 PM UTC
@@ -102,25 +117,24 @@ module "lambda_scheduler" {
 
 # resource "aws_route53_zone" "main" {  # Uncomment if you want to create a Route 53 zone
 #   name = "avigdol.com"
-  
+
 #   tags = {
 #     Name = "${var.project_name}-${var.environment}-zone"
 #   }
 # }
 
 # Create A records for subdomains
-resource "aws_route53_record" "subdomains" {
-  for_each = toset([
-    "passwords",
-    "mail", 
-    "files",
-    "monitor",
-    "jenkins"
-  ])
-  
-  zone_id = "Z03200893DL2ZD0J62J86" #aws_route53_zone.main.id  # Uncomment if you create a Route 53 zone  
-  name    = "${each.value}.avigdol.com"
-  type    = "A"
-  ttl     = 300
-  records = [module.ec2.public_ip]
+# resource "aws_route53_record" "subdomains" {
+#   for_each = toset(["passwords", "mail", "files", "monitor", "jenkins", "traefik"])
+
+#   zone_id = data.aws_route53_zone.main.zone_id
+#   name    = "${each.value}.${var.domain_name}"
+#   type    = "A"
+#   ttl     = 300
+#   records = [module.ec2.public_ip]
+# }
+
+resource "aws_cloudwatch_log_group" "user_data" {
+  name              = "/homelab/${var.environment}/user-data"
+  retention_in_days = 7
 }

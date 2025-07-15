@@ -49,5 +49,10 @@ variable "s3_bucket_name" {
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to access the instance"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Replace with your home IP for security
+  default     = ["0.0.0.0/0"] # Replace with your home IP for security
+}
+variable "domain_name" {
+  description = "Domain name for the project"
+  type        = string
+  default     = "avigdol.com"
 }
