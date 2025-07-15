@@ -1,0 +1,22 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "homelab"
+environment  = "dev"
+
+# Network Configuration
+vpc_cidr           = "10.0.0.0/16"
+public_subnet_cidr = "10.0.1.0/24"
+
+# EC2 Configuration
+instance_type = "t2.micro"
+key_name      = "homelab-key"  # Create this key pair in AWS first
+
+# Storage Configuration
+s3_bucket_name = "homelab-backups-YOUR_UNIQUE_SUFFIX"  # Must be globally unique
+
+# Security Configuration
+# Replace with your home IP address for better security
+# Get your IP: curl ifconfig.me
+allowed_cidr_blocks = ["YOUR_HOME_IP/32"]
