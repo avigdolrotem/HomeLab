@@ -8,7 +8,7 @@ A production-grade HomeLab environment on AWS for learning DevOps practices.
    - AWS CLI installed and configured
    - Terraform >= 1.6
    - Git
-   - Domain name (avigdol.com)
+   - Domain name
 
 2. **Setup**
    ```bash
