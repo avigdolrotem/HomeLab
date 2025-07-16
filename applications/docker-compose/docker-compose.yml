@@ -5,39 +5,68 @@ networks:
     driver: bridge
 
 volumes:
-  traefik-acme:
   vaultwarden-data:
+  vaultwarden-db-data:
   nextcloud-data:
-  nextcloud-db:
+  nextcloud-db-data:
   mailserver-data:
   mailserver-logs:
   prometheus-data:
   grafana-data:
   jenkins-data:
-  vaultwarden-db-data:
+
 services:
-  # Reverse Proxy with automatic SSL
+  # Reverse Proxy with automatic SSL using Route53 DNS Challenge
   traefik:
     image: traefik:v3.0
     container_name: traefik
     restart: unless-stopped
+    command:
+      # Enable API and Dashboard
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      
+      # Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      
+      # Entry points
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      
+      # ACME (Let's Encrypt) with Route53 DNS Challenge
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@avigdol.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=route53"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=60"
+      
+      # STAGING ENVIRONMENT (for testing - uncomment to test without rate limits)
+      - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      
+      # Logging
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      
     ports:
       - "80:80"
       - "443:443"
+      - "8080:8080"  # Dashboard
     networks:
       - homelab
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik-acme:/acme
-      - ./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./configs/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      # CRITICAL: Persistent acme.json file on host
+      - /home/ubuntu/homelab/traefik-data/acme.json:/acme/acme.json
     environment:
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=admin@avigdol.com
+      # Route53 DNS Challenge requires AWS credentials
+      # These will be provided by EC2 IAM role
+      - AWS_REGION=us-east-1
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.avigdol.com`)"
-      - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
 
   # Password Manager
   vaultwarden:
@@ -55,8 +84,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.vaultwarden.rule=Host(`passwords.avigdol.com`)"
-      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
       - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
     depends_on:
       - vaultwarden-db
 
@@ -93,8 +122,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.nextcloud.rule=Host(`files.avigdol.com`)"
-      - "traefik.http.routers.nextcloud.entrypoints=websecure"
       - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
     depends_on:
       - nextcloud-db
 
@@ -105,35 +134,11 @@ services:
     networks:
       - homelab
     volumes:
-      - nextcloud-db:/var/lib/postgresql/data
+      - nextcloud-db-data:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=nextcloud
       - POSTGRES_USER=nextcloud
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-
-  # Email Server
-  mailserver:
-    image: ghcr.io/docker-mailserver/docker-mailserver:latest
-    container_name: mailserver
-    hostname: mail.avigdol.com
-    restart: unless-stopped
-    networks:
-      - homelab
-    ports:
-      - "25:25"
-      - "587:587"
-      - "993:993"
-    volumes:
-      - mailserver-data:/var/mail
-      - mailserver-logs:/var/log/mail
-      - ./configs/mailserver:/tmp/docker-mailserver
-    environment:
-      - ENABLE_SPAMASSASSIN=1
-      - ENABLE_CLAMAV=1
-      - ENABLE_FAIL2BAN=1
-      - SSL_TYPE=letsencrypt
-    cap_add:
-      - NET_ADMIN
 
   # Monitoring - Prometheus
   prometheus:
@@ -153,8 +158,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prometheus.rule=Host(`prometheus.avigdol.com`)"
-      - "traefik.http.routers.prometheus.entrypoints=websecure"
       - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
 
   # Monitoring - Grafana
   grafana:
@@ -172,8 +177,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`monitor.avigdol.com`)"
-      - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
   # CI/CD - Jenkins
   jenkins:
@@ -190,6 +195,31 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.jenkins.rule=Host(`jenkins.avigdol.com`)"
-      - "traefik.http.routers.jenkins.entrypoints=websecure"
       - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
-    user: root  # Needed for Docker access
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+    user: root
+
+  # Email Server (without SSL automation for now)
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail.avigdol.com
+    restart: unless-stopped
+    networks:
+      - homelab
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+      - "995:995"
+    volumes:
+      - mailserver-data:/var/mail
+      - mailserver-logs:/var/log/mail
+      - ./configs/mailserver:/tmp/docker-mailserver
+    environment:
+      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_CLAMAV=1
+      - ENABLE_FAIL2BAN=1
+      - SSL_TYPE=manual
+    cap_add:
+      - NET_ADMIN
