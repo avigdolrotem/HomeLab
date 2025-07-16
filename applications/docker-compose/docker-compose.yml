@@ -14,6 +14,7 @@ volumes:
   prometheus-data:
   grafana-data:
   jenkins-data:
+  vaultwarden-db-data:
 services:
   # Reverse Proxy with automatic SSL
   traefik:
@@ -35,6 +36,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.avigdol.com`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
 
   # Password Manager
@@ -53,6 +55,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.vaultwarden.rule=Host(`passwords.avigdol.com`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
       - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
     depends_on:
       - vaultwarden-db
@@ -64,7 +67,7 @@ services:
     networks:
       - homelab
     volumes:
-      - vaultwarden-data:/var/lib/postgresql/data
+      - vaultwarden-db-data:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=vaultwarden
       - POSTGRES_USER=vaultwarden
@@ -90,6 +93,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.nextcloud.rule=Host(`files.avigdol.com`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
       - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
     depends_on:
       - nextcloud-db
@@ -149,6 +153,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prometheus.rule=Host(`prometheus.avigdol.com`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
       - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
 
   # Monitoring - Grafana
@@ -167,6 +172,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`monitor.avigdol.com`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
 
   # CI/CD - Jenkins
@@ -184,5 +190,6 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.jenkins.rule=Host(`jenkins.avigdol.com`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
       - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
     user: root  # Needed for Docker access
