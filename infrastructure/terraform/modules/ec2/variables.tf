@@ -34,7 +34,7 @@ variable "iam_instance_profile" {
   type        = string
 }
 
-variable "user_data" {
+variable "user_data_base64" {
   description = "User data script"
   type        = string
   default     = ""

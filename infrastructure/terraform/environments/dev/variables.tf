@@ -51,3 +51,9 @@ variable "allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]  # Replace with your home IP for security
 }
+variable "domain_name" {
+  description = "Domain name for Route53"
+  type        = string
+  default     = "avigdol.com"
+  
+}

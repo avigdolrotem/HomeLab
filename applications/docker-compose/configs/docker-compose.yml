@@ -1,0 +1,52 @@
+version: '3.8'
+
+networks:
+  homelab:
+    driver: bridge
+    name: homelab_network
+
+volumes:
+  traefik_data:
+    driver: local
+
+services:
+  # Traefik - Reverse Proxy & SSL
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    networks:
+      - homelab
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard
+    environment:
+      # Basic Traefik configuration
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_API_INSECURE=true  # For initial testing
+      - TRAEFIK_PROVIDERS_DOCKER=true
+      - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+      - TRAEFIK_PROVIDERS_DOCKER_NETWORK=homelab_network
+      - TRAEFIK_ENTRYPOINTS_WEB_ADDRESS=:80
+      - TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS=:443
+      # Logging
+      - TRAEFIK_LOG_LEVEL=INFO
+      - TRAEFIK_ACCESSLOG=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_data:/data
+    labels:
+      - "traefik.enable=true"
+      # Dashboard route (insecure for now)
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.localhost`) || Host(`localhost`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+
+# TODO: Add services incrementally
+# Next services to add:
+# 1. Vaultwarden (simple, lightweight)
+# 2. Monitoring (Prometheus + Grafana)  
+# 3. Nextcloud (more complex with database)
+# 4. Jenkins (CI/CD)
+# 5. Mailserver (most complex)

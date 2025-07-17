@@ -1,11 +1,11 @@
-# Get the latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
+# Get the latest Ubuntu AMI
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu*amd64*"]
   }
 
   filter {
@@ -16,14 +16,13 @@ data "aws_ami" "amazon_linux" {
 
 # EC2 Instance
 resource "aws_instance" "main" {
-  ami                    = data.aws_ami.amazon_linux.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = var.key_name
   subnet_id              = var.subnet_id
   vpc_security_group_ids = var.security_group_ids
   iam_instance_profile   = var.iam_instance_profile
-
-  user_data = var.user_data
+  user_data_base64 = var.user_data_base64
 
   # Storage
   root_block_device {

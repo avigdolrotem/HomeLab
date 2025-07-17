@@ -1,0 +1,12 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+
+filters:
+  instance-state-name: running
+  "tag:Name": homelab-dev-instance
+
+compose:
+  ansible_host: public_ip_address
+  ansible_user: ubuntu
+  ansible_ssh_private_key_file: ~/.ssh/homelab-key.pem

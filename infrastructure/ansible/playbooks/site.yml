@@ -1,0 +1,34 @@
+# Main site playbook - installs everything needed for HomeLab
+- name: Configure HomeLab Infrastructure
+  hosts: all
+  become: no
+  gather_facts: yes
+  
+  pre_tasks:
+    - name: Wait for instance to be ready
+      wait_for_connection:
+        timeout: 300
+    
+    - name: Gather facts after connection
+      setup:
+      
+  roles:
+    - role: ../roles/common
+    - role: ../roles/docker  
+    - role: ../roles/k3s
+
+  post_tasks:
+    - name: Display installation summary
+      debug:
+        msg:
+          - "HomeLab infrastructure setup completed!"
+          - "Docker version: {{ ansible_facts.docker_version | default('Not detected') }}"
+          - "Instance ready for application deployment"
+          - "Next: Deploy Docker Compose applications"
+    
+    - name: Create deployment ready marker
+      file:
+        path: /home/ubuntu/ansible-deployment-complete
+        state: touch
+        owner: ubuntu
+        group: ubuntu

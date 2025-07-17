@@ -40,8 +40,8 @@ resource "aws_s3_bucket_public_access_block" "main" {
 # Lifecycle configuration for cost optimization
 resource "aws_s3_bucket_lifecycle_configuration" "main" {
   bucket = aws_s3_bucket.main.id
-
   rule {
+    filter {}
     id     = "backup_lifecycle"
     status = "Enabled"
     # Delete old versions after 30 days

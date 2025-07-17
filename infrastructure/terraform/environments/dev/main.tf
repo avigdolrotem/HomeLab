@@ -3,7 +3,7 @@ terraform {
     bucket         = "homelab-terraform-state-874888505976"
     key            = "dev/terraform.tfstate"
     region         = "us-east-1"
-    dynamodb_table = "homelab-terraform-locks"
+    use_lockfile   = true
     encrypt        = true
   }
 }
@@ -81,10 +81,10 @@ module "ec2" {
   security_group_ids    = [module.security_group.security_group_id]
   iam_instance_profile  = module.iam.instance_profile_name
   
-  # User data script for initial setup
-  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
-    s3_bucket_name = var.s3_bucket_name
-  }))
+#   # User data script for initial setup
+#   user_data_base64 = base64encode(templatefile("${path.module}/user-data.sh", {   Disabled for now !!
+#     s3_bucket_name = var.s3_bucket_name
+#   }))
 }
 
 # Lambda Scheduler Module (for auto start/stop)
@@ -100,15 +100,17 @@ module "lambda_scheduler" {
   stop_schedule  = "cron(0 18 * * ? *)" # 8 PM Israel = 6 PM UTC
 }
 
-# Add to main.tf
-resource "aws_route53_zone" "main" {
-  name = "avigdol.com"
+# # Add to main.tf
+# resource "aws_route53_zone" "main" {
+#   name = "avigdol.com"
   
-  tags = {
-    Name = "${var.project_name}-${var.environment}-zone"
-  }
+#   tags = {
+#     Name = "${var.project_name}-${var.environment}-zone"
+#   }
+# }
+data "aws_route53_zone" "main" {
+  name         = var.domain_name  
 }
-
 # Create A records for subdomains
 resource "aws_route53_record" "subdomains" {
   for_each = toset([
@@ -119,7 +121,7 @@ resource "aws_route53_record" "subdomains" {
     "jenkins"
   ])
   
-  zone_id = aws_route53_zone.main.zone_id
+  zone_id = data.aws_route53_zone.main.zone_id #Uncomment if using Route53 zone  
   name    = "${each.value}.avigdol.com"
   type    = "A"
   ttl     = 300
