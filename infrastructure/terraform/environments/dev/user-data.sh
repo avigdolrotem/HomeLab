@@ -1,52 +1,42 @@
 #!/bin/bash
-set -euo pipefail
+set -e
 
-# Logging function
+# Simple logging
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" | tee -a /var/log/user-data.log
 }
 
-log "Starting HomeLab user-data script for Amazon Linux 2023..."
+log "Starting HomeLab user-data script for Ubuntu..."
 
 # Update system
 log "Updating system packages..."
-dnf update -y
+apt-get update
+apt-get upgrade -y
 
 # Install basic packages
 log "Installing basic packages..."
-if ! dnf install -y git wget unzip htop vim docker --allowerasing 2>&1 | tee -a /var/log/user-data.log; then
-    log "ERROR: Failed to install basic packages - continuing anyway"
-fi
+apt-get install -y git curl wget unzip htop vim
+
+# Install Docker
+log "Installing Docker..."
+apt-get install -y ca-certificates gnupg lsb-release
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # Start and enable Docker
-log "Configuring Docker..."
 systemctl start docker
 systemctl enable docker
-usermod -a -G docker ec2-user
+usermod -aG docker ubuntu
 
-# Install Docker Compose v2
-log "Installing Docker Compose v2..."
-# Method 1: Try dnf first
-if dnf install -y docker-compose-plugin; then
-    log "Docker Compose installed via dnf"
-else
-    log "Installing Docker Compose manually..."
-    DOCKER_CONFIG=/home/ec2-user/.docker
-    sudo -u ec2-user mkdir -p $DOCKER_CONFIG/cli-plugins
-    curl -SL "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" \
-        -o $DOCKER_CONFIG/cli-plugins/docker-compose
-    chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
-    chown -R ec2-user:ec2-user $DOCKER_CONFIG
-fi
-
-# Install AWS CLI (might already be included in AL2023)
-if ! command -v aws &> /dev/null; then
-    log "Installing AWS CLI v2..."
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    unzip awscliv2.zip
-    ./aws/install
-    rm -rf aws awscliv2.zip
-fi
+# Install AWS CLI v2
+log "Installing AWS CLI v2..."
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+./aws/install
+rm -rf aws awscliv2.zip
 
 # Install kubectl
 log "Installing kubectl..."
@@ -54,77 +44,32 @@ curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stabl
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 rm kubectl
 
-# Create health check script
-log "Creating health check script..."
-cat > /home/ec2-user/health-check.sh << 'EOF'
-#!/bin/bash
-echo "=== HomeLab Health Check ==="
-echo "Timestamp: $(date)"
-echo ""
-
-# Check Docker
-if systemctl is-active --quiet docker; then
-    echo "✅ Docker is running"
-    docker version --format 'Docker: {{.Server.Version}}'
-else
-    echo "❌ Docker is not running"
-fi
-
-# Check Docker Compose
-if docker compose version &> /dev/null; then
-    echo "✅ Docker Compose available"
-    docker compose version --short
-else
-    echo "❌ Docker Compose not available"
-fi
-
-# Check K3s
-if systemctl is-active --quiet k3s; then
-    echo "✅ K3s is running"
-    export KUBECONFIG=/home/ec2-user/.kube/config
-    kubectl get nodes 2>/dev/null || echo "⚠️  kubectl not configured properly"
-else
-    echo "❌ K3s is not running"
-fi
-
-echo "=== Health Check Complete ==="
-EOF
-
-chmod +x /home/ec2-user/health-check.sh
-chown ec2-user:ec2-user /home/ec2-user/health-check.sh
-
 # Create directories
-sudo -u ec2-user mkdir -p /home/ec2-user/{homelab,backups,.kube}
+mkdir -p /home/ubuntu/{homelab,backups,.kube}
+chown -R ubuntu:ubuntu /home/ubuntu/
 
-# Stop conflicting services (postfix might not exist in AL2023)
-systemctl stop postfix 2>/dev/null || log "Postfix not found (this is normal for AL2023)"
-systemctl disable postfix 2>/dev/null || true
-
-# Install K3s (simplified)
+# Install K3s (optional - can be skipped if not needed)
 log "Installing K3s..."
-curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -s - --write-kubeconfig-mode 644
+curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
-# Configure kubectl for ec2-user
+# Configure kubectl for ubuntu user
 if [ -f /etc/rancher/k3s/k3s.yaml ]; then
-    cp /etc/rancher/k3s/k3s.yaml /home/ec2-user/.kube/config
-    chown -R ec2-user:ec2-user /home/ec2-user/.kube
-    
-    # Fix the server URL in the config
-    sed -i 's|server: https://127.0.0.1:6443|server: https://127.0.0.1:6443|g' /home/ec2-user/.kube/config
+    cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+    chown -R ubuntu:ubuntu /home/ubuntu/.kube
     log "kubectl configured successfully"
-else
-    log "Warning: K3s config file not found"
 fi
+
+# Signal completion
+touch /home/ubuntu/user-data-complete
+chown ubuntu:ubuntu /home/ubuntu/user-data-complete
+
+log "User-data script completed successfully!"
 
 # Test installations
 log "Testing installations..."
 docker --version >> /var/log/user-data.log
-sudo -u ec2-user docker compose version >> /var/log/user-data.log 2>&1 || log "Docker Compose test failed"
+sudo -u ubuntu docker compose version >> /var/log/user-data.log 2>&1 || log "Docker Compose test failed"
 kubectl version --client >> /var/log/user-data.log 2>&1 || log "kubectl test failed"
-sudo -u ec2-user kubectl get nodes >> /var/log/user-data.log 2>&1 || log "K3s test failed"
+sudo -u ubuntu kubectl get nodes >> /var/log/user-data.log 2>&1 || log "K3s test failed"
 
-# Signal completion
-touch /home/ec2-user/user-data-complete
-chown ec2-user:ec2-user /home/ec2-user/user-data-complete
-
-log "User-data script completed successfully!"
+log "All tests completed!"

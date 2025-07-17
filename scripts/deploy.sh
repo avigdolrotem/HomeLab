@@ -94,19 +94,19 @@ sleep 30
 # Test SSH connectivity
 print_status "Testing SSH connectivity..."
 KEY_NAME=$(terraform output -raw key_name || echo "homelab-key")
-if ssh -i ~/.ssh/${KEY_NAME}.pem -o ConnectTimeout=10 -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP "echo 'SSH connection successful'"; then
+if ssh -i ~/.ssh/${KEY_NAME}.pem -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP "echo 'SSH connection successful'"; then
     print_status "SSH connection successful!"
     
-    # Run health check
-    print_status "Running health check..."
-    ssh -i ~/.ssh/${KEY_NAME}.pem ec2-user@$PUBLIC_IP "./health-check.sh" || print_warning "Health check script not found (this is normal for first deployment)"
-else
+    # # Run health check
+    # print_status "Running health check..."
+    # ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP "cat user-data-complete && echo 'Setup completed'"
+    else
     print_warning "SSH connection failed. Instance may still be initializing."
 fi
 
 print_header "Next Steps"
 echo "1. Wait a few minutes for user-data script to complete"
-echo "2. SSH to instance: ssh -i ~/.ssh/${KEY_NAME}.pem ec2-user@$PUBLIC_IP"
+echo "2. SSH to instance: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP"
 echo "3. Check user-data logs: sudo tail -f /var/log/user-data.log"
 echo "4. Run health check: ./health-check.sh"
 echo "5. Deploy applications with Docker Compose"

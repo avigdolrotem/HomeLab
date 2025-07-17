@@ -3,203 +3,97 @@ version: '3.8'
 networks:
   homelab:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  mailnet:
+    driver: bridge
+    internal: true
 
 volumes:
-  vaultwarden-data:
-  vaultwarden-db-data:
-  nextcloud-data:
-  nextcloud-db-data:
-  mailserver-data:
-  mailserver-logs:
-  prometheus-data:
-  grafana-data:
-  jenkins-data:
+  vaultwarden_data:
+    driver: local
+  nextcloud_data:
+    driver: local
+  nextcloud_db_data:
+    driver: local
+  maildata:
+    driver: local
+  mailstate:
+    driver: local
+  maillogs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  jenkins_data:
+    driver: local
 
 services:
-  # Reverse Proxy with automatic SSL using Route53 DNS Challenge
+  # Traefik - Reverse Proxy & SSL
   traefik:
     image: traefik:v3.0
     container_name: traefik
     restart: unless-stopped
-    command:
-      # Enable API and Dashboard
-      - "--api.dashboard=true"
-      - "--api.insecure=true"
-      
-      # Docker provider
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      
-      # Entry points
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      
-      # ACME (Let's Encrypt) with Route53 DNS Challenge
-      - "--certificatesresolvers.letsencrypt.acme.email=admin@avigdol.com"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=route53"
-      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=60"
-      
-      # STAGING ENVIRONMENT (for testing - uncomment to test without rate limits)
-      - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
-      
-      # Logging
-      - "--log.level=INFO"
-      - "--accesslog=true"
-      
+    networks:
+      - homelab
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Dashboard
-    networks:
-      - homelab
+      - "8080:8080"  # Traefik dashboard
+    environment:
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_API_INSECURE=true
+      - TRAEFIK_PROVIDERS_DOCKER=true
+      - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+      - TRAEFIK_ENTRYPOINTS_WEB_ADDRESS=:80
+      - TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS=:443
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=admin@avigdol.com
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE=/acme.json
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_HTTPCHALLENGE_ENTRYPOINT=web
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # CRITICAL: Persistent acme.json file on host
-      - /home/ubuntu/homelab/traefik-data/acme.json:/acme/acme.json
-    environment:
-      # Route53 DNS Challenge requires AWS credentials
-      # These will be provided by EC2 IAM role
-      - AWS_REGION=us-east-1
+      - ./data/traefik/acme.json:/acme.json
+      - ./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.avigdol.com`)"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.avigdol.com`)"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
 
-  # Password Manager
+  # Vaultwarden - Password Manager
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
     restart: unless-stopped
     networks:
       - homelab
-    volumes:
-      - vaultwarden-data:/data
     environment:
       - DOMAIN=https://passwords.avigdol.com
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
-      - DATABASE_URL=postgresql://vaultwarden:${POSTGRES_PASSWORD}@vaultwarden-db/vaultwarden
+      - SENDS_ALLOWED=true
+      - EMERGENCY_ACCESS_ALLOWED=true
+      - WEB_VAULT_ENABLED=true
+      - SIGNUPS_ALLOWED=false
+      - INVITATIONS_ALLOWED=true
+      - SMTP_HOST=mailserver
+      - SMTP_FROM=vaultwarden@avigdol.com
+      - SMTP_PORT=587
+      - SMTP_SECURITY=starttls
+      - SMTP_USERNAME=vaultwarden@avigdol.com
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+    volumes:
+      - vaultwarden_data:/data
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.vaultwarden.rule=Host(`passwords.avigdol.com`)"
+      - "traefik.http.routers.vaultwarden.tls=true"
       - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
       - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
-    depends_on:
-      - vaultwarden-db
 
-  vaultwarden-db:
-    image: postgres:15-alpine
-    container_name: vaultwarden-db
-    restart: unless-stopped
-    networks:
-      - homelab
-    volumes:
-      - vaultwarden-db-data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=vaultwarden
-      - POSTGRES_USER=vaultwarden
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-
-  # File Sync and Sharing
-  nextcloud:
-    image: nextcloud:27-apache
-    container_name: nextcloud
-    restart: unless-stopped
-    networks:
-      - homelab
-    volumes:
-      - nextcloud-data:/var/www/html
-    environment:
-      - POSTGRES_DB=nextcloud
-      - POSTGRES_USER=nextcloud
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=nextcloud-db
-      - NEXTCLOUD_ADMIN_USER=admin
-      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
-      - NEXTCLOUD_TRUSTED_DOMAINS=files.avigdol.com
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nextcloud.rule=Host(`files.avigdol.com`)"
-      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
-      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
-    depends_on:
-      - nextcloud-db
-
-  nextcloud-db:
-    image: postgres:15-alpine
-    container_name: nextcloud-db
-    restart: unless-stopped
-    networks:
-      - homelab
-    volumes:
-      - nextcloud-db-data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=nextcloud
-      - POSTGRES_USER=nextcloud
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-
-  # Monitoring - Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    restart: unless-stopped
-    networks:
-      - homelab
-    volumes:
-      - prometheus-data:/prometheus
-      - ./configs/prometheus:/etc/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.prometheus.rule=Host(`prometheus.avigdol.com`)"
-      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
-      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
-
-  # Monitoring - Grafana
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: unless-stopped
-    networks:
-      - homelab
-    volumes:
-      - grafana-data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - GF_SERVER_DOMAIN=monitor.avigdol.com
-      - GF_SERVER_ROOT_URL=https://monitor.avigdol.com
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`monitor.avigdol.com`)"
-      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
-
-  # CI/CD - Jenkins
-  jenkins:
-    image: jenkins/jenkins:lts
-    container_name: jenkins
-    restart: unless-stopped
-    networks:
-      - homelab
-    volumes:
-      - jenkins-data:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - JENKINS_OPTS=--httpPort=8080
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.jenkins.rule=Host(`jenkins.avigdol.com`)"
-      - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
-      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
-    user: root
-
-  # Email Server (without SSL automation for now)
+  # Docker Mailserver
   mailserver:
     image: ghcr.io/docker-mailserver/docker-mailserver:latest
     container_name: mailserver
@@ -207,19 +101,207 @@ services:
     restart: unless-stopped
     networks:
       - homelab
+      - mailnet
     ports:
-      - "25:25"
-      - "587:587"
-      - "993:993"
-      - "995:995"
-    volumes:
-      - mailserver-data:/var/mail
-      - mailserver-logs:/var/log/mail
-      - ./configs/mailserver:/tmp/docker-mailserver
+      - "25:25"    # SMTP
+      - "587:587"  # SMTP Submission
+      - "993:993"  # IMAPS
     environment:
-      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_RSPAMD=1
       - ENABLE_CLAMAV=1
       - ENABLE_FAIL2BAN=1
-      - SSL_TYPE=manual
+      - ENABLE_POSTGREY=1
+      - ENABLE_MANAGESIEVE=1
+      - ONE_DIR=1
+      - ACCOUNT_PROVISIONER=FILE
+      - PERMIT_DOCKER=network
+      - SPOOF_PROTECTION=1
+      - ENABLE_SRS=1
+      - SSL_TYPE=letsencrypt
+    volumes:
+      - maildata:/var/mail
+      - mailstate:/var/mail-state
+      - maillogs:/var/log/mail
+      - ./data/traefik/acme.json:/etc/letsencrypt/acme.json:ro
+      - ./configs/mailserver/:/tmp/docker-mailserver/
     cap_add:
       - NET_ADMIN
+      - SYS_PTRACE
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mailserver.rule=Host(`mail.avigdol.com`)"
+      - "traefik.http.routers.mailserver.tls=true"
+      - "traefik.http.routers.mailserver.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mailserver.loadbalancer.server.port=80"
+
+  # Nextcloud Database
+  nextcloud-db:
+    image: postgres:15-alpine
+    container_name: nextcloud-db
+    restart: unless-stopped
+    networks:
+      - homelab
+    environment:
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+    volumes:
+      - nextcloud_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextcloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nextcloud - File Sync & Share
+  nextcloud:
+    image: nextcloud:28-apache
+    container_name: nextcloud
+    restart: unless-stopped
+    networks:
+      - homelab
+    environment:
+      - POSTGRES_HOST=nextcloud-db
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - NEXTCLOUD_ADMIN_USER=admin
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+      - NEXTCLOUD_TRUSTED_DOMAINS=files.avigdol.com
+      - OVERWRITEPROTOCOL=https
+      - OVERWRITEHOST=files.avigdol.com
+    volumes:
+      - nextcloud_data:/var/www/html
+      - ./data/nextcloud/custom_apps:/var/www/html/custom_apps
+      - ./data/nextcloud/config:/var/www/html/config
+      - ./data/nextcloud/data:/var/www/html/data
+    depends_on:
+      nextcloud-db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`files.avigdol.com`)"
+      - "traefik.http.routers.nextcloud.tls=true"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$${1}/remote.php/dav/"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-caldav"
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - homelab
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.avigdol.com`)"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # Grafana - Metrics Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - homelab
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_ROOT_URL=https://monitor.avigdol.com
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`monitor.avigdol.com`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # Node Exporter - System Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    networks:
+      - homelab
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  # cAdvisor - Container Metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    networks:
+      - homelab
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+
+  # Jenkins - CI/CD
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    networks:
+      - homelab
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs/jenkins/plugins.txt:/usr/share/jenkins/ref/plugins.txt
+    user: root
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.avigdol.com`)"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+
+  # Portainer - Container Management (Optional)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    networks:
+      - homelab
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/portainer:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.avigdol.com`)"
+      - "traefik.http.routers.portainer.tls=true"
+      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
