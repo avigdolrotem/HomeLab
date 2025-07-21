@@ -20,6 +20,14 @@ resource "aws_security_group" "main" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
+    # HTTP access
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "testing access"
+  }
 
   # HTTPS access
   ingress {

@@ -118,7 +118,9 @@ resource "aws_route53_record" "subdomains" {
     "mail", 
     "files",
     "monitor",
-    "jenkins"
+    "jenkins",
+    "whoami",
+    "traefik"
   ])
   
   zone_id = data.aws_route53_zone.main.zone_id #Uncomment if using Route53 zone  
