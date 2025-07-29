@@ -1,3 +1,5 @@
+# Updated IAM Module - infrastructure/terraform/modules/iam/main.tf
+
 # IAM Role for EC2
 resource "aws_iam_role" "ec2_role" {
   name = "${var.project_name}-${var.environment}-ec2-role"
@@ -20,7 +22,7 @@ resource "aws_iam_role" "ec2_role" {
   }
 }
 
-# IAM Policy for S3 and CloudWatch
+# IAM Policy for S3, CloudWatch, RDS, and Secrets Manager
 resource "aws_iam_role_policy" "ec2_policy" {
   name = "${var.project_name}-${var.environment}-ec2-policy"
   role = aws_iam_role.ec2_role.id
@@ -59,6 +61,35 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Action = [
           "ec2:DescribeInstances",
           "ec2:DescribeInstanceStatus"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBInstances",
+          "rds:DescribeDBClusters"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          var.secrets_manager_arns,
+          "arn:aws:secretsmanager:*:*:secret:homelab-dev-*-db-*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:ListSecrets"
         ]
         Resource = "*"
       }

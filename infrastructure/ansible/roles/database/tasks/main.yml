@@ -1,0 +1,189 @@
+# infrastructure/ansible/roles/database/tasks/main.yml
+# RDS database setup and initialization
+
+- name: Wait for RDS to be available
+  wait_for:
+    host: "{{ rds_endpoint.split(':')[0] }}"
+    port: 5432
+    timeout: 300
+    delay: 10
+
+- name: Get master database credentials from Secrets Manager
+  shell: |
+    aws secretsmanager get-secret-value \
+      --secret-id homelab-dev-rds-master \
+      --query SecretString --output text
+  register: master_secret_raw
+
+- name: Parse master credentials
+  set_fact:
+    master_secret: "{{ master_secret_raw.stdout | from_json }}"
+
+- name: Test master database connection
+  postgresql_ping:
+    login_host: "{{ rds_endpoint.split(':')[0] }}"
+    login_port: "{{ master_secret.port | default(5432) }}"
+    login_user: "{{ master_secret.username }}"
+    login_password: "{{ master_secret.password }}"
+    login_db: "{{ master_secret.database }}"
+
+- name: Create application databases
+  postgresql_db:
+    name: "{{ item }}"
+    login_host: "{{ rds_endpoint.split(':')[0] }}"
+    login_port: "{{ master_secret.port | default(5432) }}"
+    login_user: "{{ master_secret.username }}"
+    login_password: "{{ master_secret.password }}"
+    state: present
+  loop:
+    - vaultwarden
+    - nextcloud
+    - grafana
+    - jenkins
+
+- name: Generate random passwords for application users
+  set_fact:
+    app_passwords: "{{ app_passwords | default({}) | combine({item: lookup('password', '/dev/null chars=ascii_letters,digits length=32')}) }}"
+  loop:
+    - vaultwarden
+    - nextcloud
+    - grafana
+    - jenkins
+
+- name: Create application database users
+  postgresql_user:
+    name: "{{ item }}"
+    password: "{{ app_passwords[item] }}"
+    login_host: "{{ rds_endpoint.split(':')[0] }}"
+    login_port: "{{ master_secret.port | default(5432) }}"
+    login_user: "{{ master_secret.username }}"
+    login_password: "{{ master_secret.password }}"
+    db: "{{ item }}"
+    priv: "ALL"
+    state: present
+  loop:
+    - vaultwarden
+    - nextcloud
+    - grafana
+    - jenkins
+
+- name: Store application passwords in Secrets Manager
+  shell: |
+    aws secretsmanager create-secret \
+      --name "homelab-dev-{{ item }}-db" \
+      --description "Database credentials for {{ item }}" \
+      --secret-string '{
+        "host": "{{ rds_endpoint.split(':')[0] }}",
+        "port": "5432",
+        "database": "{{ item }}",
+        "username": "{{ item }}",
+        "password": "{{ app_passwords[item] }}",
+        "url": "postgresql://{{ item }}:{{ app_passwords[item] }}@{{ master_secret.host.split(':')[0] }}:5432/{{ item }}"
+      }' 2>/dev/null || aws secretsmanager update-secret \
+      --secret-id "homelab-dev-{{ item }}-db" \
+      --secret-string '{
+        "host": "{{ rds_endpoint.split(':')[0] }}",
+        "port": "5432",
+        "database": "{{ item }}",
+        "username": "{{ item }}",
+        "password": "{{ app_passwords[item] }}",
+        "url": "postgresql://{{ item }}:{{ app_passwords[item] }}@{{ master_secret.host.split(':')[0] }}:5432/{{ item }}"
+      }'
+  loop:
+    - vaultwarden
+    - nextcloud
+    - grafana
+    - jenkins
+
+- name: Create database secret retrieval script
+  copy:
+    content: |
+      #!/bin/bash
+      # Retrieve database secrets from AWS Secrets Manager
+      SECRET_NAME=$1
+      if [ -z "$SECRET_NAME" ]; then
+          echo "Usage: get-db-secret <secret-name>"
+          echo "Available secrets:"
+          echo "  homelab-dev-rds-master"
+          echo "  homelab-dev-vaultwarden-db"
+          echo "  homelab-dev-nextcloud-db"
+          echo "  homelab-dev-grafana-db"
+          echo "  homelab-dev-jenkins-db"
+          exit 1
+      fi
+      
+      aws secretsmanager get-secret-value \
+          --secret-id "$SECRET_NAME" \
+          --query SecretString \
+          --output text
+    dest: /usr/local/bin/get-db-secret
+    mode: '0755'
+  become: yes
+
+- name: Create database environment generator script
+  copy:
+    content: |
+      #!/bin/bash
+      # Generate Docker Compose environment files from Secrets Manager
+      
+      ENV_DIR="/home/ubuntu/homelab/docker-compose/.env.d"
+      mkdir -p "$ENV_DIR"
+      
+      APPS=("vaultwarden" "nextcloud" "grafana" "jenkins")
+      
+      for APP in "${APPS[@]}"; do
+          echo "Generating environment for $APP..."
+          
+          SECRET_NAME="homelab-dev-${APP}-db"
+          SECRET_JSON=$(get-db-secret "$SECRET_NAME")
+          
+          if [ $? -eq 0 ]; then
+              DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
+              DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
+              DB_NAME=$(echo "$SECRET_JSON" | jq -r '.database')
+              DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
+              DB_PASS=$(echo "$SECRET_JSON" | jq -r '.password')
+              DB_URL=$(echo "$SECRET_JSON" | jq -r '.url')
+              
+              cat > "$ENV_DIR/${APP}-db.env" << EOF
+      # Database configuration for $APP
+      DATABASE_URL=$DB_URL
+      DB_HOST=$DB_HOST
+      DB_PORT=$DB_PORT
+      DB_NAME=$DB_NAME
+      DB_USER=$DB_USER
+      DB_PASSWORD=$DB_PASS
+      EOF
+              
+              echo "✅ Environment file created for $APP"
+              chmod 600 "$ENV_DIR/${APP}-db.env"
+          else
+              echo "❌ Failed to retrieve secrets for $APP"
+          fi
+      done
+    dest: /usr/local/bin/generate-db-env
+    mode: '0755'
+  become: yes
+
+# Verification
+- name: Verify database connections
+  postgresql_ping:
+    login_host: "{{ rds_endpoint.split(':')[0] }}"
+    login_port: "{{ master_secret.port | default(5432) }}"
+    login_user: "{{ item }}"
+    login_password: "{{ app_passwords[item] }}"
+    login_db: "{{ item }}"
+  loop:
+    - vaultwarden
+    - nextcloud
+    - grafana
+    - jenkins
+
+- name: Display database setup completion
+  debug:
+    msg:
+      - "✅ Database setup complete"
+      - "Created databases: vaultwarden, nextcloud, grafana, jenkins"
+      - "Created application users with secure passwords"
+      - "Stored credentials in AWS Secrets Manager"
+      - "Helper scripts: get-db-secret, generate-db-env"

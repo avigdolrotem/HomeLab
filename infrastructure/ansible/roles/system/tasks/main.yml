@@ -1,8 +1,15 @@
-# Common system setup tasks
+# infrastructure/ansible/roles/system/tasks/main.yml
+# Basic system setup and package installation
+
 - name: Update package cache
   apt:
     update_cache: yes
     cache_valid_time: 3600
+  become: yes
+
+- name: Upgrade all packages
+  apt:
+    upgrade: dist
   become: yes
 
 - name: Install essential packages
@@ -12,10 +19,13 @@
       - curl
       - wget
       - unzip
+      - jq
       - htop
       - vim
       - tree
-      - jq
+      - postgresql-client
+      - python3-psycopg2
+      - python3-pip
     state: present
   become: yes
 
@@ -34,7 +44,7 @@
         remote_src: yes
 
     - name: Install AWS CLI
-      command: "/tmp/aws/install"
+      command: "/tmp/aws/install --update"
       become: yes
       args:
         creates: "/usr/local/bin/aws"
@@ -47,33 +57,6 @@
         - "/tmp/awscliv2.zip"
         - "/tmp/aws"
 
-- name: Install kubectl
-  block:
-    - name: Get latest kubectl version
-      uri:
-        url: "https://dl.k8s.io/release/stable.txt"
-        return_content: yes
-      register: kubectl_version
-
-    - name: Download kubectl
-      get_url:
-        url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
-        dest: "/tmp/kubectl"
-        mode: '0755'
-
-    - name: Install kubectl
-      copy:
-        src: "/tmp/kubectl"
-        dest: "/usr/local/bin/kubectl"
-        mode: '0755'
-        remote_src: yes
-      become: yes
-
-    - name: Clean up kubectl download
-      file:
-        path: "/tmp/kubectl"
-        state: absent
-
 - name: Create homelab directory structure
   file:
     path: "{{ item }}"
@@ -84,9 +67,26 @@
   loop:
     - "/home/ubuntu/homelab"
     - "/home/ubuntu/backups"
-    - "/home/ubuntu/.kube"
 
 - name: Set timezone to UTC
   timezone:
     name: UTC
   become: yes
+
+# Verification
+- name: Verify essential commands are available
+  command: "{{ item }} --version"
+  register: command_check
+  changed_when: false
+  failed_when: command_check.rc != 0
+  loop:
+    - git
+    - curl
+    - wget
+    - jq
+    - psql
+    - aws
+
+- name: Display system setup completion
+  debug:
+    msg: "✅ System setup complete - all essential packages installed and verified"
