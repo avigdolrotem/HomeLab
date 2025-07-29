@@ -1,4 +1,6 @@
-# K3s installation (for future Kubernetes learning)
+# infrastructure/ansible/roles/k3s/tasks/main.yml
+# K3s Kubernetes installation (commented out in site.yml)
+
 - name: Check if K3s is already installed
   stat:
     path: /usr/local/bin/k3s
@@ -10,7 +12,7 @@
   become: yes
   when: not k3s_installed.stat.exists
 
-- name: Enable K3s service
+- name: Enable and start K3s service
   systemd:
     name: k3s
     enabled: yes
@@ -23,7 +25,14 @@
     host: localhost
     delay: 10
     timeout: 60
-  when: not k3s_installed.stat.exists
+
+- name: Create .kube directory for ubuntu user
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
 
 - name: Copy K3s kubeconfig for ubuntu user
   copy:
@@ -35,12 +44,49 @@
     mode: '0600'
   become: yes
 
-- name: Test K3s installation
+- name: Install kubectl (if not already present)
+  block:
+    - name: Get latest kubectl version
+      uri:
+        url: "https://dl.k8s.io/release/stable.txt"
+        return_content: yes
+      register: kubectl_version
+
+    - name: Download kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+        dest: "/tmp/kubectl"
+        mode: '0755'
+
+    - name: Install kubectl
+      copy:
+        src: "/tmp/kubectl"
+        dest: "/usr/local/bin/kubectl"
+        mode: '0755'
+        remote_src: yes
+      become: yes
+
+    - name: Clean up kubectl download
+      file:
+        path: "/tmp/kubectl"
+        state: absent
+
+# Verification
+- name: Test K3s cluster
   command: kubectl get nodes
   register: k3s_nodes
   become_user: ubuntu
   changed_when: false
 
-- name: Display K3s status
+- name: Test kubectl functionality
+  command: kubectl get pods -A
+  register: k3s_pods
+  become_user: ubuntu
+  changed_when: false
+
+- name: Display K3s setup completion
   debug:
-    msg: "K3s nodes: {{ k3s_nodes.stdout_lines }}"
+    msg:
+      - "✅ K3s setup complete"
+      - "Cluster nodes: {{ k3s_nodes.stdout_lines }}"
+      - "System pods running: {{ k3s_pods.stdout_lines | length - 1 }} pods"

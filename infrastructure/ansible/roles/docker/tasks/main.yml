@@ -1,10 +1,13 @@
-# Docker installation and configuration
+# infrastructure/ansible/roles/docker/tasks/main.yml
+# Docker and Docker Compose installation
+
 - name: Install Docker prerequisites
   apt:
     name:
       - ca-certificates
       - gnupg
       - lsb-release
+      - apt-transport-https
     state: present
   become: yes
 
@@ -50,24 +53,6 @@
     append: yes
   become: yes
 
-- name: Test Docker installation
-  command: docker --version
-  register: docker_version
-  changed_when: false
-
-- name: Display Docker version
-  debug:
-    msg: "Docker installed: {{ docker_version.stdout }}"
-
-- name: Test Docker Compose installation
-  command: docker compose version
-  register: compose_version
-  changed_when: false
-
-- name: Display Docker Compose version
-  debug:
-    msg: "Docker Compose installed: {{ compose_version.stdout }}"
-
 - name: Create Docker daemon configuration
   copy:
     content: |
@@ -84,8 +69,36 @@
   become: yes
   notify: restart docker
 
-- name: Ensure Docker is running
+- name: Restart Docker to apply configuration
   systemd:
     name: docker
-    state: started
+    state: restarted
   become: yes
+
+# Verification
+- name: Wait for Docker to be ready
+  pause:
+    seconds: 10
+
+- name: Verify Docker installation
+  command: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Verify Docker Compose installation
+  command: docker compose version
+  register: compose_version
+  changed_when: false
+
+- name: Test Docker functionality
+  command: docker run --rm hello-world
+  register: docker_test
+  changed_when: false
+
+- name: Display Docker setup completion
+  debug:
+    msg:
+      - "✅ Docker setup complete"
+      - "Docker version: {{ docker_version.stdout }}"
+      - "Docker Compose version: {{ compose_version.stdout }}"
+      - "Docker test: {{ 'PASSED' if docker_test.rc == 0 else 'FAILED' }}"

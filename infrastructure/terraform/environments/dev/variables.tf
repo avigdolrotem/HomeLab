@@ -1,3 +1,5 @@
+# Updated infrastructure/terraform/environments/dev/variables.tf
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
@@ -28,6 +30,12 @@ variable "public_subnet_cidr" {
   default     = "10.0.1.0/24"
 }
 
+variable "private_subnet_cidr" {
+  description = "CIDR block for private subnet (for RDS)"
+  type        = string
+  default     = "10.0.2.0/24"
+}
+
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
@@ -51,9 +59,28 @@ variable "allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]  # Replace with your home IP for security
 }
+
 variable "domain_name" {
   description = "Domain name for Route53"
   type        = string
   default     = "avigdol.com"
-  
+}
+
+# RDS Configuration Variables
+variable "rds_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"  # Free tier eligible
+}
+
+variable "rds_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20  # Free tier limit
+}
+
+variable "rds_backup_retention_period" {
+  description = "Number of days to retain backups"
+  type        = number
+  default     = 7
 }
