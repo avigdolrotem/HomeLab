@@ -204,3 +204,10 @@
       - "Docker Compose file: {{ 'FOUND' if compose_file.stat.exists else 'MISSING' }}"
       - "Management scripts: {{ 'INSTALLED' if scripts.results | selectattr('stat.exists') | list | length == 2 else 'INCOMPLETE' }}"
       - "Ready to run: homelab start"
+
+- name: Start applications automatically
+  shell: |
+    cd /home/ubuntu/homelab/docker-compose
+    /usr/local/bin/generate-db-env
+    docker compose up -d
+  become_user: ubuntu

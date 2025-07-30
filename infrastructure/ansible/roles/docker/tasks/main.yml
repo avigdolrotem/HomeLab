@@ -53,6 +53,9 @@
     append: yes
   become: yes
 
+- name: Reconnect to apply group changes
+  meta: reset_connection
+
 - name: Create Docker daemon configuration
   copy:
     content: |

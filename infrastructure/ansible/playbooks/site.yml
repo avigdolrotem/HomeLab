@@ -34,8 +34,8 @@
     - role: database
       tags: ['database', 'rds', 'postgres']
       
-    # - role: k3s
-    #   tags: ['k3s', 'kubernetes']
+    - role: k3s
+      tags: ['k3s', 'kubernetes']
       
     - role: applications
       tags: ['applications', 'deploy']
