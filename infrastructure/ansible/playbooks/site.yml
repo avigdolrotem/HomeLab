@@ -1,17 +1,24 @@
 # infrastructure/ansible/playbooks/site.yml
-# Main HomeLab configuration playbook
+# Playbook with deployment mode control
 
 - name: Configure HomeLab Infrastructure
   hosts: all
   become: no
   gather_facts: yes
   
-  pre_tasks:
-    - name: Wait for instance to be ready
-      wait_for_connection:
-        timeout: 300
+  vars:
+    # Deployment mode: 'docker' or 'k8s'
+    deployment_mode: "{{ deploy_mode | default('docker') }}"
     
-    - name: Get RDS endpoint from Terraform output
+  pre_tasks:
+    - name: Display deployment configuration
+      debug:
+        msg:
+          - "🚀 HomeLab Deployment Starting"
+          - "Mode: {{ deployment_mode.upper() }}"
+          - "Target: {{ 'Docker Compose' if deployment_mode == 'docker' else 'Kubernetes' }}"
+    
+    - name: Get RDS endpoint
       shell: terraform output -raw rds_endpoint
       delegate_to: localhost
       register: rds_endpoint_result
@@ -25,60 +32,18 @@
       run_once: true
       
   roles:
-    - role: system
-      tags: ['system', 'packages']
-      
-    - role: docker
-      tags: ['docker', 'containers']
-      
-    - role: database
-      tags: ['database', 'rds', 'postgres']
-      
+    - role: system      
+    - role: docker      
+    - role: database      
     - role: k3s
-      tags: ['k3s', 'kubernetes']
+      when: deployment_mode == 'k8s'
       
     - role: applications
-      tags: ['applications', 'deploy']
+      tags: ['applications']
 
   post_tasks:
-    - name: Display deployment summary
+    - name: Display completion summary
       debug:
         msg:
-          - "🎉 HomeLab configuration completed successfully!"
-          - ""
-          - "📋 What was configured:"
-          - "  ✅ System packages and utilities"
-          - "  ✅ Docker and Docker Compose"
-          - "  ✅ RDS database initialization"
-          - "  ✅ Application files and directory structure"
-          - "  # ⏸️  K3s Kubernetes (commented out)"
-          - ""
-          - "🚀 Next steps:"
-          - "  1. SSH to instance: ssh -i ~/.ssh/homelab-key.pem ubuntu@{{ ansible_host }}"
-          - "  2. Start applications: homelab start"
-          - "  3. Check status: homelab status"
-          - "  4. View logs: homelab logs"
-          - ""
-          - "🔗 Application URLs (after starting):"
-          - "  • Vaultwarden: https://passwords.avigdol.com"
-          - "  • Nextcloud: https://files.avigdol.com"
-          - "  • Grafana: https://monitor.avigdol.com"
-          - "  • Jenkins: https://jenkins.avigdol.com"
-          - ""
-          - "🛠️  Management commands:"
-          - "  • homelab {start|stop|restart|status|logs}"
-          - "  • db-manage {test|connect}"
-          - "  • get-db-secret <secret-name>"
-
-    - name: Create deployment completion marker
-      copy:
-        content: |
-          HomeLab deployment completed: {{ ansible_date_time.iso8601 }}
-          RDS endpoint: {{ rds_endpoint }}
-          Instance: {{ ansible_host }}
-          
-          Applications ready to start with: homelab start
-        dest: /home/ubuntu/ansible-deployment-complete
-        owner: ubuntu
-        group: ubuntu
-        mode: '0644'
+          - "🎉 HomeLab {{ deployment_mode.upper() }} deployment complete!"
+          - "{{ '🐳 Docker Compose mode - Apps auto-started' if deployment_mode == 'docker' else '☸️  Kubernetes mode - Check: kubectl get pods -A' }}"
