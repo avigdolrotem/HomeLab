@@ -1,0 +1,27 @@
+# infrastructure/ansible/roles/applications/tasks/docker-deploy.yml
+# Docker Compose deployment tasks
+
+- name: Generate database environment files
+  command: /usr/local/bin/generate-db-env
+  become_user: ubuntu
+  ignore_errors: yes
+
+- name: Generate application secrets
+  command: ./generate-secrets.sh
+  args:
+    chdir: /home/ubuntu/homelab/docker-compose
+  become_user: ubuntu
+  ignore_errors: yes
+
+- name: Start Docker Compose applications
+  command: docker compose up -d
+  args:
+    chdir: /home/ubuntu/homelab/docker-compose
+  become_user: ubuntu
+
+- name: Display Docker deployment status
+  debug:
+    msg:
+      - "✅ Docker Compose applications deployed"
+      - "🌐 URLs: https://passwords.avigdol.com, https://files.avigdol.com"
+      - "🔧 Management: homelab {start|stop|status}"

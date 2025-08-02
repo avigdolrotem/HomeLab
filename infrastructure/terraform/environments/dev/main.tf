@@ -36,6 +36,37 @@ provider "aws" {
   }
 }
 
+
+# Generate SSH key pair
+resource "tls_private_key" "homelab" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# Create AWS key pair from generated public key
+resource "aws_key_pair" "homelab" {
+  key_name   = "${var.project_name}-${var.environment}-key"
+  public_key = tls_private_key.homelab.public_key_openssh
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-key"
+  }
+}
+
+# Save private key to local file
+resource "local_file" "private_key" {
+  content  = tls_private_key.homelab.private_key_pem
+  filename = "${path.module}/homelab-key.pem"
+  file_permission = "0600"
+}
+
+# Save public key to local file  
+resource "local_file" "public_key" {
+  content  = tls_private_key.homelab.public_key_openssh
+  filename = "${path.module}/homelab-key.pub"
+  file_permission = "0644"
+}
+
 # Data sources for availability zones
 data "aws_availability_zones" "available" {
   state = "available"
@@ -116,7 +147,7 @@ module "ec2" {
   project_name           = var.project_name
   environment            = var.environment
   instance_type          = var.instance_type
-  key_name              = var.key_name
+  key_name              = aws_key_pair.homelab.key_name
   subnet_id             = module.vpc.public_subnet_id
   security_group_ids    = [module.security_group.security_group_id]
   iam_instance_profile  = module.iam.instance_profile_name

@@ -1,5 +1,9 @@
 # infrastructure/ansible/roles/applications/tasks/main.yml
-# Application directory setup and file copying
+# Smart role that deploys Docker Compose OR Kubernetes
+
+- name: Display deployment mode
+  debug:
+    msg: "🚀 Deploying applications in {{ deployment_mode | default('docker') }} mode"
 
 - name: Create application directory structure
   file:
@@ -9,198 +13,38 @@
     group: ubuntu
     mode: '0755'
   loop:
+    - "/home/ubuntu/homelab"
     - "/home/ubuntu/homelab/docker-compose"
-    - "/home/ubuntu/homelab/docker-compose/.env.d"
-    - "/home/ubuntu/homelab/docker-compose/caddy"
-    - "/home/ubuntu/homelab/docker-compose/configs"
-    - "/home/ubuntu/homelab/docker-compose/configs/nextcloud"
-    - "/home/ubuntu/homelab/docker-compose/configs/vaultwarden"
-    - "/home/ubuntu/homelab/docker-compose/monitoring"
-    - "/home/ubuntu/homelab/docker-compose/monitoring/prometheus"
+    - "/home/ubuntu/homelab/kubernetes"
 
-- name: Copy Docker Compose application files
+- name: Copy all application files
   copy:
-    src: "{{ playbook_dir }}/../../../applications/docker-compose/"
-    dest: "/home/ubuntu/homelab/docker-compose/"
+    src: "{{ playbook_dir }}/../../../applications/"
+    dest: "/home/ubuntu/homelab/"
     owner: ubuntu
     group: ubuntu
-    mode: '0755'
+    mode: '0644'
     directory_mode: '0755'
 
-- name: Set proper permissions for sensitive files
+- name: Set executable permissions
   file:
     path: "{{ item }}"
-    mode: '0700'
-    owner: ubuntu
-    group: ubuntu
+    mode: '0755'
   loop:
     - "/home/ubuntu/homelab/docker-compose/generate-secrets.sh"
     - "/home/ubuntu/homelab/docker-compose/deploy.sh"
-  ignore_errors: yes  # Files might not exist yet
+  ignore_errors: yes
 
-- name: Create homelab management script
-  copy:
-    content: |
-      #!/bin/bash
-      # HomeLab management script
-      
-      set -e
-      COMPOSE_DIR="/home/ubuntu/homelab/docker-compose"
-      
-      case "${1:-help}" in
-          "start")
-              echo "🚀 Starting HomeLab applications..."
-              cd "$COMPOSE_DIR"
-              
-              # Generate database environment files
-              /usr/local/bin/generate-db-env
-              
-              # Generate application secrets
-              if [ -f "./generate-secrets.sh" ]; then
-                  ./generate-secrets.sh
-              else
-                  echo "⚠️  generate-secrets.sh not found, skipping..."
-              fi
-              
-              # Start applications
-              docker compose up -d
-              echo "✅ Applications started!"
-              ;;
-          "stop")
-              echo "🛑 Stopping HomeLab applications..."
-              cd "$COMPOSE_DIR"
-              docker compose down
-              echo "✅ Applications stopped!"
-              ;;
-          "restart")
-              echo "🔄 Restarting HomeLab applications..."
-              cd "$COMPOSE_DIR"
-              docker compose restart
-              echo "✅ Applications restarted!"
-              ;;
-          "status")
-              echo "📊 HomeLab application status:"
-              cd "$COMPOSE_DIR"
-              docker compose ps
-              ;;
-          "logs")
-              cd "$COMPOSE_DIR"
-              docker compose logs -f "${2:-}"
-              ;;
-          "update")
-              echo "🔄 Updating application configurations..."
-              cd "$COMPOSE_DIR"
-              /usr/local/bin/generate-db-env
-              docker compose up -d
-              echo "✅ Applications updated!"
-              ;;
-          *)
-              echo "HomeLab Management Script"
-              echo "Usage: $0 {start|stop|restart|status|logs|update}"
-              echo ""
-              echo "Commands:"
-              echo "  start   - Start all applications"
-              echo "  stop    - Stop all applications" 
-              echo "  restart - Restart all applications"
-              echo "  status  - Show application status"
-              echo "  logs    - Show application logs (optional: service name)"
-              echo "  update  - Update configurations and restart"
-              ;;
-      esac
+- name: Install management scripts
+  template:
+    src: homelab-script.j2
     dest: /usr/local/bin/homelab
     mode: '0755'
   become: yes
 
-- name: Create database management script
-  copy:
-    content: |
-      #!/bin/bash
-      # Database management and testing script
-      
-      case "${1:-help}" in
-          "test")
-              echo "🔍 Testing database connections..."
-              
-              APPS=("vaultwarden" "nextcloud" "grafana" "jenkins")
-              for APP in "${APPS[@]}"; do
-                  echo "Testing $APP database..."
-                  SECRET_JSON=$(get-db-secret "homelab-dev-${APP}-db")
-                  if [ $? -eq 0 ]; then
-                      DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
-                      DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
-                      DB_NAME=$(echo "$SECRET_JSON" | jq -r '.database')
-                      DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
-                      
-                      if pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"; then
-                          echo "✅ $APP database connection OK"
-                      else
-                          echo "❌ $APP database connection FAILED"
-                      fi
-                  else
-                      echo "❌ Could not retrieve $APP database credentials"
-                  fi
-              done
-              ;;
-          "connect")
-              if [ -z "$2" ]; then
-                  echo "Usage: $0 connect <app>"
-                  echo "Available apps: vaultwarden, nextcloud, grafana, jenkins"
-                  exit 1
-              fi
-              
-              echo "🔗 Connecting to $2 database..."
-              SECRET_JSON=$(get-db-secret "homelab-dev-$2-db")
-              
-              DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
-              DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
-              DB_NAME=$(echo "$SECRET_JSON" | jq -r '.database')
-              DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
-              
-              PGPASSWORD=$(echo "$SECRET_JSON" | jq -r '.password') \
-              psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"
-              ;;
-          *)
-              echo "Database Management Script"
-              echo "Usage: $0 {test|connect}"
-              echo ""
-              echo "Commands:"
-              echo "  test           - Test all database connections"
-              echo "  connect <app>  - Connect to application database"
-              ;;
-      esac
-    dest: /usr/local/bin/db-manage
-    mode: '0755'
-  become: yes
+# Deploy based on mode
+- include_tasks: docker-deploy.yml
+  when: deployment_mode | default('docker') == 'docker'
 
-# Verification
-- name: Verify application directory structure
-  stat:
-    path: "{{ item }}"
-  register: app_dirs
-  loop:
-    - "/home/ubuntu/homelab/docker-compose"
-    - "/home/ubuntu/homelab/docker-compose/.env.d"
-    - "/home/ubuntu/homelab/docker-compose/caddy"
-    - "/home/ubuntu/homelab/docker-compose/monitoring"
-
-- name: Verify Docker Compose file exists
-  stat:
-    path: "/home/ubuntu/homelab/docker-compose/docker-compose.yml"
-  register: compose_file
-
-- name: Verify management scripts are executable
-  stat:
-    path: "{{ item }}"
-  register: scripts
-  loop:
-    - "/usr/local/bin/homelab"
-    - "/usr/local/bin/db-manage"
-
-- name: Display applications setup completion
-  debug:
-    msg:
-      - "✅ Applications setup complete"
-      - "Directory structure: {{ 'CREATED' if app_dirs.results | selectattr('stat.exists') | list | length == 4 else 'INCOMPLETE' }}"
-      - "Docker Compose file: {{ 'FOUND' if compose_file.stat.exists else 'MISSING' }}"
-      - "Management scripts: {{ 'INSTALLED' if scripts.results | selectattr('stat.exists') | list | length == 2 else 'INCOMPLETE' }}"
-      - "Ready to run: homelab start"
+- include_tasks: k8s-deploy.yml  
+  when: deployment_mode | default('docker') == 'k8s'

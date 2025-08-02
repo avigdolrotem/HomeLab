@@ -1,0 +1,26 @@
+# infrastructure/ansible/roles/applications/tasks/k8s-deploy.yml
+# Kubernetes deployment tasks
+
+- name: Stop Docker Compose (free ports for K8s)
+  command: docker compose down
+  args:
+    chdir: /home/ubuntu/homelab/docker-compose
+  become_user: ubuntu
+  ignore_errors: yes
+
+- name: Apply Kubernetes manifests
+  command: kubectl apply -f /home/ubuntu/homelab/kubernetes/traefik/traefik.yaml
+  command: kubectl apply -f /home/ubuntu/homelab/kubernetes/nextcloud/nextcloud.yaml
+  become_user: ubuntu
+
+- name: Wait for pods to be ready
+  command: kubectl wait --for=condition=ready pod -l app=nextcloud -n homelab --timeout=300s
+  become_user: ubuntu
+  ignore_errors: yes
+
+- name: Display K8s deployment status
+  debug:
+    msg:
+      - "✅ Kubernetes applications deployed"
+      - "🌐 URLs: https://files.avigdol.com (via Traefik)"
+      - "🔧 Management: kubectl get pods -A"

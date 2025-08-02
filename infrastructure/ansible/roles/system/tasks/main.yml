@@ -1,6 +1,16 @@
 # infrastructure/ansible/roles/system/tasks/main.yml
 # Basic system setup and package installation
+- name: Wait for cloud-init to finish
+  wait_for:
+    path: /var/lib/cloud/instance/boot-finished
+    timeout: 300
+  become: yes
 
+- name: Kill any hanging apt processes
+  shell: killall apt-get || true
+  become: yes
+  ignore_errors: yes
+  
 - name: Update package cache
   apt:
     update_cache: yes
