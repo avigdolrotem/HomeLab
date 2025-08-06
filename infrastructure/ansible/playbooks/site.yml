@@ -39,7 +39,7 @@
       when: deployment_mode == 'k8s'
       
     - role: applications
-      tags: ['applications']
+    - role: backup
 
   post_tasks:
     - name: Display completion summary

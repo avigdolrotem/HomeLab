@@ -10,6 +10,7 @@
 *.retry
 .vault_pass
 .ansible
+infrastructure/ansible/collections/
 # Environment variables
 .env
 *.env

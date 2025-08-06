@@ -385,4 +385,12 @@ case "${1:-deploy}" in
         echo "Use '$0 help' for usage information"
         exit 1
         ;;
+
+    # Add this near the end of the deploy_services() function:
+    log_info "Setting up smart backup/restore..."
+    if command -v smart-backup &> /dev/null; then
+        smart-backup auto
+    else
+        log_warning "Smart backup script not found, skipping..."
+    fi
 esac
