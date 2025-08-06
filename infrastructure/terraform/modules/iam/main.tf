@@ -1,4 +1,4 @@
-# Updated IAM Module - infrastructure/terraform/modules/iam/main.tf
+# Fixed IAM Module - infrastructure/terraform/modules/iam/main.tf
 
 # IAM Role for EC2
 resource "aws_iam_role" "ec2_role" {
@@ -22,7 +22,7 @@ resource "aws_iam_role" "ec2_role" {
   }
 }
 
-# IAM Policy for S3, CloudWatch, RDS, and Secrets Manager
+# IAM Policy for EC2 with all required permissions
 resource "aws_iam_role_policy" "ec2_policy" {
   name = "${var.project_name}-${var.environment}-ec2-policy"
   role = aws_iam_role.ec2_role.id
@@ -31,12 +31,19 @@ resource "aws_iam_role_policy" "ec2_policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "S3BucketAccess"
         Effect = "Allow"
         Action = [
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
-          "s3:ListBucket"
+          "s3:ListBucket",
+          "s3:CreateMultipartUpload",
+          "s3:CompleteMultipartUpload",
+          "s3:AbortMultipartUpload",
+          "s3:ListMultipartUploads",
+          "s3:ListParts",
+          "s3:GetBucketLocation"
         ]
         Resource = [
           "arn:aws:s3:::${var.s3_bucket_name}",
@@ -44,6 +51,32 @@ resource "aws_iam_role_policy" "ec2_policy" {
         ]
       },
       {
+        Sid      = "S3ListAllBuckets"
+        Effect   = "Allow"
+        Action   = ["s3:ListAllMyBuckets", "s3:GetBucketLocation"]
+        Resource = "*"
+      },
+      {
+        Sid    = "SecretsManagerAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:CreateSecret",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:GetResourcePolicy",
+          "secretsmanager:PutResourcePolicy",
+          "secretsmanager:DeleteResourcePolicy",
+          "secretsmanager:ListSecrets"
+        ]
+        Resource = [
+          var.secrets_manager_arns,
+          "arn:aws:secretsmanager:*:*:secret:homelab-dev-*-db-*"
+        ]
+      },
+      {
+        Sid    = "CloudWatchLogs"
         Effect = "Allow"
         Action = [
           "cloudwatch:PutMetricData",
@@ -57,6 +90,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Resource = "*"
       },
       {
+        Sid    = "EC2Describe"
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
@@ -65,31 +99,11 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Resource = "*"
       },
       {
+        Sid    = "RDSDescribe"
         Effect = "Allow"
         Action = [
           "rds:DescribeDBInstances",
           "rds:DescribeDBClusters"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
-        ]
-        Resource = [
-          var.secrets_manager_arns,
-          "arn:aws:secretsmanager:*:*:secret:homelab-dev-*-db-*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:CreateSecret",
-          "secretsmanager:UpdateSecret",
-          "secretsmanager:PutSecretValue",
-          "secretsmanager:ListSecrets"
         ]
         Resource = "*"
       }

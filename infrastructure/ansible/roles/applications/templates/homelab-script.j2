@@ -1,0 +1,38 @@
+#!/bin/bash
+# HomeLab management script
+
+set -e
+COMPOSE_DIR="/home/ubuntu/homelab/docker-compose"
+
+case "${1:-help}" in
+    "start")
+        echo "🚀 Starting HomeLab applications..."
+        cd "$COMPOSE_DIR"
+        /usr/local/bin/generate-db-env
+{% if deployment_mode == 'docker' %}
+        docker compose up -d
+{% else %}
+        kubectl apply -f /home/ubuntu/homelab/kubernetes/
+{% endif %}
+        echo "✅ Applications started!"
+        ;;
+    "stop")
+        cd "$COMPOSE_DIR"
+{% if deployment_mode == 'docker' %}
+        docker compose down
+{% else %}
+        kubectl delete -f /home/ubuntu/homelab/kubernetes/
+{% endif %}
+        ;;
+    "status")
+{% if deployment_mode == 'docker' %}
+        cd "$COMPOSE_DIR"
+        docker compose ps
+{% else %}
+        kubectl get pods -A
+{% endif %}
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status}"
+        ;;
+esac

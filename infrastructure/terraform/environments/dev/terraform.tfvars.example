@@ -8,10 +8,10 @@ environment  = "dev"
 # Network Configuration
 vpc_cidr           = "10.0.0.0/16"
 public_subnet_cidr = "10.0.1.0/24"
+private_subnet_cidr = "10.0.2.0/24"
 
 # EC2 Configuration
 instance_type = "t2.micro"
-key_name      = "homelab-key"  # Create this key pair in AWS first
 
 # Storage Configuration
 s3_bucket_name = "homelab-backups-YOUR_UNIQUE_SUFFIX"  # Must be globally unique

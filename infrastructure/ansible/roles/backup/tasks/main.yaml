@@ -1,0 +1,21 @@
+---
+- name: Create backup scripts directory
+  file:
+    path: "/home/ubuntu/scripts"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy smart backup script
+  copy:
+    src: smart-backup.sh
+    dest: /usr/local/bin/smart-backup
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+
+- name: Display backup setup completion
+  debug:
+    msg: "✅ Backup system installed and ready"

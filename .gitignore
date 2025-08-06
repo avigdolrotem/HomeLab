@@ -9,7 +9,8 @@
 # Ansible
 *.retry
 .vault_pass
-
+.ansible
+infrastructure/ansible/collections/
 # Environment variables
 .env
 *.env
@@ -37,6 +38,7 @@ logs/
 
 # SSL certificates
 *.pem
+*.pub
 *.key
 *.crt
 
