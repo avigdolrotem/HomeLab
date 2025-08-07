@@ -1,0 +1,80 @@
+- name: Download and install Minikube
+  get_url:
+    url: "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64"
+    dest: "/usr/local/bin/minikube"
+    mode: '0755'
+  become: yes
+
+- name: Download and install kubectl
+  block:
+    - name: Get latest kubectl version
+      uri:
+        url: "https://dl.k8s.io/release/stable.txt"
+        return_content: yes
+      register: kubectl_version
+
+    - name: Download kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+        dest: "/usr/local/bin/kubectl"
+        mode: '0755'
+      become: yes
+
+- name: Setup kubectl config directory
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Start Minikube cluster
+  command: minikube start --driver=docker --cpus=2 --memory=2048mb
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+
+- name: Wait for Minikube to be ready
+  command: minikube status
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  retries: 10
+  delay: 10
+  until: "'Running' in minikube_status.stdout"
+  register: minikube_status
+
+- name: Setup kubectl config
+  command: minikube kubectl -- config view --raw
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: kubectl_config
+
+- name: Write kubectl config
+  copy:
+    content: "{{ kubectl_config.stdout }}"
+    dest: /home/ubuntu/.kube/config
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Wait for kubectl context to be ready
+  command: kubectl config current-context
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  retries: 5
+  delay: 3
+  register: kubectl_context
+
+- name: Enable Minikube addons
+  command: minikube addons enable {{ item }}
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  loop:
+    - dashboard
+    - metrics-server
+    - ingress
+  ignore_errors: true

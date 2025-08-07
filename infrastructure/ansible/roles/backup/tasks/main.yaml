@@ -1,4 +1,3 @@
----
 - name: Create backup scripts directory
   file:
     path: "/home/ubuntu/scripts"

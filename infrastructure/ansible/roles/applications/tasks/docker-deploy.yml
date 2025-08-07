@@ -1,6 +1,3 @@
-# infrastructure/ansible/roles/applications/tasks/docker-deploy.yml
-# Docker Compose deployment tasks
-
 - name: Generate database environment files
   command: /usr/local/bin/generate-db-env
   become_user: ubuntu

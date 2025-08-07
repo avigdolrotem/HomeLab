@@ -1,6 +1,3 @@
-# infrastructure/ansible/roles/applications/tasks/main.yml
-# Smart role that deploys Docker Compose OR Kubernetes
-
 - name: Display deployment mode
   debug:
     msg: "🚀 Deploying applications in {{ deployment_mode | default('docker') }} mode"

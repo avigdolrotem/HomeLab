@@ -81,10 +81,10 @@ ansible-playbook -i inventories/aws_ec2.yml playbooks/site.yml
 ```
 
 ### 4. Access Applications
-- **Password Manager**: https://passwords.avigdol.com
-- **File Storage**: https://files.avigdol.com  
-- **Monitoring**: https://monitor.avigdol.com
-- **CI/CD**: https://jenkins.avigdol.com
+- **Password Manager**: https://passwords.example.com
+- **File Storage**: https://files.example.com  
+- **Monitoring**: https://monitor.example.com
+- **CI/CD**: https://jenkins.example.com
 
 ## 🎛️ Deployment Modes
 
