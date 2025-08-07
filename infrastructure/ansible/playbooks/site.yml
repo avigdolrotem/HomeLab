@@ -1,22 +1,15 @@
-# infrastructure/ansible/playbooks/site.yml
-# Playbook with deployment mode control
-
 - name: Configure HomeLab Infrastructure
   hosts: all
   become: no
   gather_facts: yes
   
   vars:
-    # Deployment mode: 'docker' or 'k8s'
     deployment_mode: "{{ deploy_mode | default('docker') }}"
     
   pre_tasks:
-    - name: Display deployment configuration
+    - name: Display deployment mode
       debug:
-        msg:
-          - "🚀 HomeLab Deployment Starting"
-          - "Mode: {{ deployment_mode.upper() }}"
-          - "Target: {{ 'Docker Compose' if deployment_mode == 'docker' else 'Kubernetes' }}"
+        msg: "🚀 Deploying in {{ deployment_mode.upper() }} mode"
     
     - name: Get RDS endpoint
       shell: terraform output -raw rds_endpoint
@@ -32,17 +25,15 @@
       run_once: true
       
   roles:
-    - role: system      
-    - role: docker      
-    - role: database      
-    - role: minikube
-    - role: helm      
-    - role: applications
-    - role: backup
+    - role: system      # Base system setup
+    - role: docker      # Docker + Docker Compose
+    - role: database    # RDS setup and application databases
+    - role: minikube    # Kubernetes cluster
+    - role: helm        # Helm package manager
+    - role: applications # Deploy apps based on deployment_mode
+    - role: backup      # Backup system
 
   post_tasks:
-    - name: Display completion summary
+    - name: Display completion
       debug:
-        msg:
-          - "🎉 HomeLab {{ deployment_mode.upper() }} deployment complete!"
-          - "{{ '🐳 Docker Compose mode - Apps auto-started' if deployment_mode == 'docker' else '☸️  Kubernetes mode - Check: kubectl get pods -A' }}"
+        msg: "✅ HomeLab {{ deployment_mode.upper() }} deployment complete!"
