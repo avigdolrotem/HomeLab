@@ -56,8 +56,8 @@ This project showcases enterprise-grade DevOps practices through a fully automat
 
 ### 1. Clone and Setup
 ```bash
-git clone <repository-url>
-cd homelab-portfolio
+git clone https://github.com/avigdolrotem/homelab
+cd homelab
 ./scripts/setup.sh
 ```
 
