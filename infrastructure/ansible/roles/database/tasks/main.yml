@@ -1,7 +1,7 @@
 # infrastructure/ansible/roles/database/tasks/main.yml
-# Database setup using proper PostgreSQL Ansible modules
+# Clean database setup
 
-- name: Install required packages first
+- name: Install PostgreSQL client packages
   package:
     name:
       - postgresql-client-common
@@ -10,8 +10,7 @@
     state: present
   become: yes
 
-
-- name: Add PostgreSQL official APT repository
+- name: Add PostgreSQL repository
   block:
     - name: Add PostgreSQL GPG key
       apt_key:
@@ -25,11 +24,6 @@
         state: present
       become: yes
 
-    - name: Update package cache
-      apt:
-        update_cache: yes
-      become: yes
-
     - name: Install PostgreSQL 15 client
       package:
         name: postgresql-client-15
@@ -41,42 +35,39 @@
   wait_for:
     host: "{{ rds_endpoint.split(':')[0] }}"
     port: 5432
-    timeout: 300
-    delay: 10
+    timeout: 600
+    delay: 30
 
-- name: Get master database credentials from Secrets Manager
-  set_fact:
-    master_secret: "{{ lookup('amazon.aws.aws_secret', 'homelab-dev-rds-master') }}"
+- name: Get master credentials and setup databases
+  block:
+    - name: Get master database credentials
+      set_fact:
+        master_secret: "{{ lookup('amazon.aws.aws_secret', 'homelab-dev-rds-master') }}"
 
-- name: Parse master credentials
-  set_fact:
-    db_host: "{{ master_secret.host.split(':')[0] }}"
-    db_port: "{{ master_secret.port }}"
-    master_user: "{{ master_secret.username }}"
-    master_password: "{{ master_secret.password }}"
+    - name: Parse master credentials
+      set_fact:
+        db_host: "{{ master_secret.host.split(':')[0] }}"
+        db_port: "{{ master_secret.port }}"
+        master_user: "{{ master_secret.username }}"
+        master_password: "{{ master_secret.password }}"
 
-- name: Generate consistent passwords for application users
-  set_fact:
-    app_passwords: "{{ app_passwords | default({}) | combine({item: lookup('password', '/dev/null chars=ascii_letters,digits length=32')}) }}"
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  run_once: true
+    - name: Generate application user passwords
+      set_fact:
+        app_passwords: "{{ app_passwords | default({}) | combine({item: lookup('password', '/dev/null chars=ascii_letters,digits length=32')}) }}"
+      loop: [vaultwarden, nextcloud, grafana, jenkins]
+      run_once: true
 
-- name: Test master database connection
+- name: Test master connection
   community.postgresql.postgresql_ping:
     login_host: "{{ db_host }}"
     login_port: "{{ db_port }}"
     login_user: "{{ master_user }}"
     login_password: "{{ master_password }}"
     login_db: homelab
+  retries: 10
+  delay: 30
+  until: master_connection_test is succeeded
   register: master_connection_test
-
-- name: Display master connection result
-  debug:
-    msg: "Master database connection: {{ 'SUCCESS' if master_connection_test is succeeded else 'FAILED' }}"
 
 - name: Create application databases
   community.postgresql.postgresql_db:
@@ -87,30 +78,11 @@
     login_password: "{{ master_password }}"
     state: present
     encoding: UTF8
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  register: database_creation
+  loop: [vaultwarden, nextcloud, grafana, jenkins]
+  retries: 3
+  delay: 10
 
-- name: Remove existing application users (to reset passwords)
-  community.postgresql.postgresql_user:
-    name: "{{ item }}_user"
-    login_host: "{{ db_host }}"
-    login_port: "{{ db_port }}"
-    login_user: "{{ master_user }}"
-    login_password: "{{ master_password }}"
-    login_db: "homelab"
-    state: absent
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  ignore_errors: true
-
-- name: Create application database users with new passwords
+- name: Create application users
   community.postgresql.postgresql_user:
     name: "{{ item }}_user"
     password: "{{ app_passwords[item] }}"
@@ -121,14 +93,11 @@
     login_db: "homelab"
     state: present
     encrypted: true
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  register: user_creation
+  loop: [vaultwarden, nextcloud, grafana, jenkins]
+  retries: 3
+  delay: 10
 
-- name: Grant database ownership to application users
+- name: Grant database privileges
   community.postgresql.postgresql_privs:
     db: "{{ item }}"
     login_host: "{{ db_host }}"
@@ -139,13 +108,11 @@
     type: database
     privs: ALL
     state: present
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
+  loop: [vaultwarden, nextcloud, grafana, jenkins]
+  retries: 3
+  delay: 10
 
-- name: Grant schema privileges to application users
+- name: Grant schema privileges
   community.postgresql.postgresql_privs:
     db: "{{ item }}"
     login_host: "{{ db_host }}"
@@ -157,39 +124,11 @@
     objs: public
     privs: ALL
     state: present
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
+  loop: [vaultwarden, nextcloud, grafana, jenkins]
+  retries: 3
+  delay: 10
 
-- name: Test application user connections
-  community.postgresql.postgresql_ping:
-    login_host: "{{ db_host }}"
-    login_port: "{{ db_port }}"
-    login_user: "{{ item }}_user"
-    login_password: "{{ app_passwords[item] }}"
-    login_db: "{{ item }}"
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  register: app_connection_tests
-  ignore_errors: true
-
-- name: Display connection test results
-  debug:
-    msg: "Connection test for {{ item }}: {{ 'SUCCESS' if app_connection_tests.results[ansible_loop.index0] is succeeded else 'FAILED' }}"
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  loop_control:
-    extended: true
-
-- name: Store application database secrets in AWS Secrets Manager
+- name: Store secrets in AWS Secrets Manager
   community.aws.secretsmanager_secret:
     name: "homelab-dev-{{ item }}-db"
     description: "Database credentials for {{ item }}"
@@ -207,130 +146,11 @@
         } | to_json
       }}
     state: present
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  register: secret_storage
+  loop: [vaultwarden, nextcloud, grafana, jenkins]
 
-- name: Verify stored secrets by retrieving them
-  set_fact:
-    stored_secret_{{ item | replace('-', '_') }}: "{{ lookup('amazon.aws.aws_secret', 'homelab-dev-' + item + '-db') }}"
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-
-- name: Final connection verification using stored secrets
-  community.postgresql.postgresql_ping:
-    login_host: "{{ db_host }}"
-    login_port: "{{ db_port }}"
-    login_user: "{{ item }}_user"
-    login_password: "{{ app_passwords[item] }}"
-    login_db: "{{ item }}"
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  register: final_verification
-  ignore_errors: true
-
-- name: Display final verification results
-  debug:
-    msg: "Final verification for {{ item }}: {{ 'SUCCESS' if final_verification.results[ansible_loop.index0] is succeeded else 'FAILED' }}"
-  loop:
-    - vaultwarden
-    - nextcloud
-    - grafana
-    - jenkins
-  loop_control:
-    extended: true
-
-- name: Create database secret retrieval script
-  copy:
-    content: |
-      #!/bin/bash
-      # Retrieve database secrets from AWS Secrets Manager
-      SECRET_NAME=$1
-      if [ -z "$SECRET_NAME" ]; then
-          echo "Usage: get-db-secret <secret-name>"
-          echo "Available secrets:"
-          echo "  homelab-dev-rds-master"
-          echo "  homelab-dev-vaultwarden-db"
-          echo "  homelab-dev-nextcloud-db"
-          echo "  homelab-dev-grafana-db"
-          echo "  homelab-dev-jenkins-db"
-          exit 1
-      fi
-      
-      aws secretsmanager get-secret-value \
-          --secret-id "$SECRET_NAME" \
-          --query SecretString \
-          --output text
-    dest: /usr/local/bin/get-db-secret
-    mode: '0755'
-  become: yes
-
-- name: Create database environment generator script
-  copy:
-    content: |
-      #!/bin/bash
-      # Generate Docker Compose environment files from Secrets Manager
-      
-      ENV_DIR="/home/ubuntu/homelab/docker-compose/.env.d"
-      mkdir -p "$ENV_DIR"
-      
-      APPS=("vaultwarden" "nextcloud" "grafana" "jenkins")
-      
-      for APP in "${APPS[@]}"; do
-          echo "Generating environment for $APP..."
-          
-          SECRET_NAME="homelab-dev-${APP}-db"
-          SECRET_JSON=$(get-db-secret "$SECRET_NAME" 2>/dev/null)
-          
-          if [ $? -eq 0 ] && [ -n "$SECRET_JSON" ]; then
-              # Generate environment file with proper variable names
-              echo "$SECRET_JSON" | jq -r '
-                "# Database configuration for '"$APP"'",
-                "DATABASE_URL=" + .url,
-                "DB_HOST=" + .host,
-                "DB_PORT=" + (.port | tostring),
-                "DB_NAME=" + .database,
-                "DB_USER=" + .username,
-                "DB_PASSWORD=" + .password
-              ' > "$ENV_DIR/${APP}-db.env"
-              
-              echo "✅ Environment file created for $APP"
-              chmod 600 "$ENV_DIR/${APP}-db.env"
-          else
-              echo "❌ Failed to retrieve secrets for $APP"
-          fi
-      done
-      
-      echo "🎯 Database environment files ready in $ENV_DIR"
-      ls -la "$ENV_DIR" 2>/dev/null || echo "Directory not found"
+- name: Install database environment generator script
+  template:
+    src: generate-db-env.sh.j2
     dest: /usr/local/bin/generate-db-env
     mode: '0755'
   become: yes
-
-- name: Display database setup completion summary
-  debug:
-    msg:
-      - "🎉 Database setup completed!"
-      - ""
-      - "📋 Configuration summary:"
-      - "  ✅ Master connection: {{ 'SUCCESS' if master_connection_test is succeeded else 'FAILED' }}"
-      - "  ✅ Databases: {{ database_creation.results | map(attribute='db') | join(', ') }}"
-      - "  ✅ Users created: {{ user_creation.results | selectattr('changed', 'equalto', true) | list | length }}/4"
-      - "  ✅ Connection tests: {{ app_connection_tests.results | rejectattr('failed', 'defined') | list | length }}/4 passed"
-      - "  ✅ Secrets stored: {{ secret_storage.results | selectattr('changed', 'equalto', true) | list | length }}/4"
-      - "  ✅ Final verification: {{ final_verification.results | rejectattr('failed', 'defined') | list | length }}/4 passed"
-      - ""
-      - "🔧 Helper scripts installed:"
-      - "  • /usr/local/bin/get-db-secret"
-      - "  • /usr/local/bin/generate-db-env"
-      - ""
-      - "🚀 Database ready for applications!"
