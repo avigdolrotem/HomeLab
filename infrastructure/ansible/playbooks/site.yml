@@ -35,9 +35,8 @@
     - role: system      
     - role: docker      
     - role: database      
-    - role: k3s
-      when: deployment_mode == 'k8s'
-      
+    - role: minikube
+    - role: helm      
     - role: applications
     - role: backup
 

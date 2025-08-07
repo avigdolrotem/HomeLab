@@ -1,0 +1,26 @@
+# infrastructure/ansible/roles/helm/tasks/main.yml
+# Simple Helm installation
+
+- name: Download Helm installation script
+  get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get_helm.sh
+    mode: '0755'
+
+- name: Install Helm
+  command: /tmp/get_helm.sh
+  become: yes
+
+- name: Remove Helm installation script
+  file:
+    path: /tmp/get_helm.sh
+    state: absent
+
+- name: Add stable Helm repository
+  command: helm repo add stable https://charts.helm.sh/stable
+  become_user: ubuntu
+  ignore_errors: true
+
+- name: Update Helm repositories
+  command: helm repo update
+  become_user: ubuntu

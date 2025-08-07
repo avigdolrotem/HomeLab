@@ -1,0 +1,99 @@
+# infrastructure/ansible/roles/minikube/tasks/main.yml
+# Simple Minikube installation
+
+- name: Download and install Minikube
+  get_url:
+    url: "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64"
+    dest: "/usr/local/bin/minikube"
+    mode: '0755'
+  become: yes
+
+- name: Download and install kubectl
+  block:
+    - name: Get latest kubectl version
+      uri:
+        url: "https://dl.k8s.io/release/stable.txt"
+        return_content: yes
+      register: kubectl_version
+
+    - name: Download kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+        dest: "/usr/local/bin/kubectl"
+        mode: '0755'
+      become: yes
+
+- name: Setup kubectl config directory for ubuntu user
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Start Minikube cluster
+  command: minikube start --driver=docker --cpus=2 --memory=2048mb
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: minikube_start
+
+- name: Wait for Minikube to be ready
+  command: minikube status
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: minikube_status
+  retries: 10
+  delay: 10
+  until: "'Running' in minikube_status.stdout"
+
+- name: Setup kubectl config
+  command: minikube kubectl -- config view --raw
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: kubectl_config
+
+- name: Write kubectl config
+  copy:
+    content: "{{ kubectl_config.stdout }}"
+    dest: /home/ubuntu/.kube/config
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Verify kubectl context is set correctly
+  command: kubectl config current-context
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: current_context
+  retries: 5
+  delay: 5
+
+- name: Enable Minikube addons
+  command: minikube addons enable {{ item }}
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  loop:
+    - dashboard
+    - metrics-server
+  ignore_errors: true
+
+- name: Enable ingress addon separately (often problematic)
+  command: minikube addons enable ingress
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  ignore_errors: true
+  register: ingress_result
+
+- name: Display Minikube setup result
+  debug:
+    msg:
+      - "Minikube installation completed"
+      - "Status: {{ 'SUCCESS' if minikube_start.rc == 0 else 'CHECK MANUALLY' }}"
+      - "Current context: {{ current_context.stdout | default('Not set') }}"
+      - "Ingress addon: {{ 'ENABLED' if ingress_result.rc == 0 else 'FAILED (enable manually)' }}"
