@@ -1,0 +1,50 @@
+replicaCount: 1
+
+image:
+  repository: vaultwarden/server
+  tag: "1.30.3-alpine"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Disable SSL for now
+  hosts:
+    - host: passwords.avigdol.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []  # Disable TLS for now
+
+env:
+  WEBSOCKET_ENABLED: "true"
+  SIGNUPS_ALLOWED: "false"
+  INVITATIONS_ALLOWED: "true"
+  DOMAIN: "http://passwords.avigdol.com"  # Use HTTP for now
+  SMTP_HOST: "mail.avigdol.com"
+  SMTP_FROM: "no-reply@avigdol.com"
+  SMTP_PORT: "587"
+  SMTP_SECURITY: "starttls"
+
+database:
+  external: true
+  secretName: vaultwarden-db-secret
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

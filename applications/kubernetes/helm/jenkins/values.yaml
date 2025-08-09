@@ -1,0 +1,48 @@
+jenkins:
+  controller:
+    image:
+      repository: "jenkins/jenkins"
+      tag: "2.440.1-lts"
+    
+    # Admin password from secret created by Ansible (FIXED KEYS)
+    admin:
+      existingSecret: jenkins-admin-secret
+      userKey: jenkins-admin-user
+      passwordKey: jenkins-admin-password
+    
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Disable SSL for now
+      hostName: jenkins.avigdol.com
+      tls: []  # Disable TLS for now
+
+    persistence:
+      enabled: true
+      size: 5Gi
+
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+
+    javaOpts: "-Xmx1g -XX:MaxRAM=1g"
+
+    # Database connection via environment variables from ExternalSecret
+    containerEnv:
+      - name: DATABASE_URL
+        valueFrom:
+          secretKeyRef:
+            name: jenkins-db-secret
+            key: DATABASE_URL
+
+  agent:
+    enabled: false
+
+  persistence:
+    enabled: true
+    size: 5Gi
