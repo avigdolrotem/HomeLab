@@ -1,0 +1,57 @@
+replicaCount: 1
+
+image:
+  repository: nextcloud
+  tag: "28.0.2-apache"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Disable SSL for now
+    nginx.ingress.kubernetes.io/proxy-body-size: "512m"
+  hosts:
+    - host: files.avigdol.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []  # Disable TLS for now
+
+env:
+  NEXTCLOUD_ADMIN_USER: "admin"
+  NEXTCLOUD_TRUSTED_DOMAINS: "files.avigdol.com"
+  OVERWRITEPROTOCOL: "http"  # Use HTTP for now
+  OVERWRITEHOST: "files.avigdol.com"
+  REDIS_HOST: "redis"
+
+admin:
+  secretName: nextcloud-admin-secret
+
+database:
+  external: true
+  secretName: nextcloud-db-secret
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "redis-password-from-secret"
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi

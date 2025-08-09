@@ -1,26 +1,165 @@
-# infrastructure/ansible/roles/applications/tasks/k8s-deploy.yml
-# Kubernetes deployment tasks
+# Kubernetes deployment tasks - FIXED
 
-- name: Stop Docker Compose (free ports for K8s)
-  command: docker compose down
-  args:
-    chdir: /home/ubuntu/homelab/docker-compose
+- name: Install External Secrets Operator
+  shell: |
+    helm repo add external-secrets https://charts.external-secrets.io
+    helm repo update
+    helm upgrade --install external-secrets \
+      external-secrets/external-secrets \
+      --namespace external-secrets-system \
+      --create-namespace \
+      --set installCRDs=true
   become_user: ubuntu
-  ignore_errors: yes
+  environment:
+    HOME: /home/ubuntu
 
-- name: Apply Kubernetes manifests
-  command: kubectl apply -f /home/ubuntu/homelab/kubernetes/traefik/traefik.yaml
-  command: kubectl apply -f /home/ubuntu/homelab/kubernetes/nextcloud/nextcloud.yaml
+- name: Create homelab namespace
+  command: kubectl create namespace homelab
   become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  ignore_errors: true
 
-- name: Wait for pods to be ready
-  command: kubectl wait --for=condition=ready pod -l app=nextcloud -n homelab --timeout=300s
+- name: Get AWS credentials from instance role
+  shell: |
+    # Get role name
+    ROLE_NAME=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/)
+    
+    # Get all credentials in one call
+    AWS_CREDS=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE_NAME)
+    
+    # Extract values
+    ACCESS_KEY=$(echo $AWS_CREDS | jq -r '.AccessKeyId')
+    SECRET_KEY=$(echo $AWS_CREDS | jq -r '.SecretAccessKey')
+    SESSION_TOKEN=$(echo $AWS_CREDS | jq -r '.Token')
+    
+    # Create the secret
+    kubectl create secret generic aws-credentials \
+      --from-literal=access-key-id="$ACCESS_KEY" \
+      --from-literal=secret-access-key="$SECRET_KEY" \
+      --from-literal=session-token="$SESSION_TOKEN" \
+      --namespace=homelab \
+      --dry-run=client -o yaml | kubectl apply -f -
   become_user: ubuntu
-  ignore_errors: yes
+  environment:
+    HOME: /home/ubuntu
 
-- name: Display K8s deployment status
+- name: Apply namespace and External Secrets configuration
+  command: kubectl apply -f {{ item }}
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  loop:
+    - /home/ubuntu/homelab/kubernetes/namespace.yaml
+    - /home/ubuntu/homelab/kubernetes/external-secrets/
+
+- name: Generate admin passwords for applications
+  set_fact:
+    app_admin_passwords:
+      nextcloud: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+      grafana: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+      jenkins: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+
+- name: Create admin password secrets with correct key names
+  shell: |
+    kubectl create secret generic {{ item.key }}-admin-secret \
+      --from-literal={{ item.key | upper }}_ADMIN_PASS={{ item.value }} \
+      {% if item.key == 'grafana' %}--from-literal=admin-user=admin \
+      --from-literal=admin-password={{ item.value }}{% endif %} \
+      {% if item.key == 'jenkins' %}--from-literal=jenkins-admin-user=admin \
+      --from-literal=jenkins-admin-password={{ item.value }}{% endif %} \
+      --namespace=homelab \
+      --dry-run=client -o yaml | kubectl apply -f -
+  loop: "{{ app_admin_passwords | dict2items }}"
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+
+- name: Add Helm repositories for official charts
+  shell: |
+    helm repo add grafana https://grafana.github.io/helm-charts
+    helm repo add jenkins https://charts.jenkins.io
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+    helm repo update
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+    
+- name: Clean up existing ingress-nginx resources
+  shell: |
+    # Delete existing ingress-nginx resources that might conflict
+    kubectl delete namespace ingress-nginx --ignore-not-found=true
+    kubectl delete clusterrole ingress-nginx --ignore-not-found=true
+    kubectl delete clusterrolebinding ingress-nginx --ignore-not-found=true
+    kubectl delete validatingwebhookconfiguration ingress-nginx-admission --ignore-not-found=true
+    kubectl delete ingressclass nginx --ignore-not-found=true
+    # Wait a moment for cleanup
+    sleep 10
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  ignore_errors: true
+
+- name: Install ingress-nginx controller
+  shell: |
+    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+      --namespace ingress-nginx \
+      --create-namespace \
+      --set controller.service.type=NodePort \
+      --set controller.service.nodePorts.http=30080 \
+      --set controller.service.nodePorts.https=30443
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+
+- name: Deploy custom applications with Helm
+  shell: |
+    cd /home/ubuntu/homelab/kubernetes/helm/{{ item }}
+    helm upgrade --install {{ item }} . --namespace homelab --create-namespace
+  loop:
+    - vaultwarden
+    - nextcloud
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: helm_deploy_custom
+  ignore_errors: true
+
+- name: Deploy official chart applications
+  shell: |
+    cd /home/ubuntu/homelab/kubernetes/helm/{{ item }}
+    helm dependency update
+    helm upgrade --install {{ item }} . --namespace homelab --create-namespace
+  loop:
+    - grafana
+    - jenkins
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: helm_deploy_official
+  ignore_errors: true
+
+- name: Setup ingress port forwarding and iptables
+  shell: |
+    # Kill any existing port forwards
+    pkill -f "kubectl port-forward.*ingress-nginx-controller" || true
+    
+    # Start port forwarding in background
+    nohup kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 8080:80 8443:443 --address 0.0.0.0 > /dev/null 2>&1 &
+    
+    # Add iptables rules (check if they exist first)
+    iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080 || \
+    iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080
+    
+    iptables -t nat -C PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443 || \
+    iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443
+  become_user: ubuntu
+  become: yes
+
+- name: Display deployment status
   debug:
     msg:
-      - "✅ Kubernetes applications deployed"
-      - "🌐 URLs: https://files.avigdol.com (via Traefik)"
-      - "🔧 Management: kubectl get pods -A"
+      - "☸️ Kubernetes deployment completed"
+      - "Check status: kubectl get pods -n homelab"
+      - "Check ingress: kubectl get ingress -n homelab"
+      - "Port forwarding enabled on 8080→80, 8443→443"
