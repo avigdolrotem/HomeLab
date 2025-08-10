@@ -1,0 +1,9 @@
+# applications/kubernetes/manifests/00-namespace/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homelab
+  labels:
+    name: homelab
+    app.kubernetes.io/name: homelab
+    app.kubernetes.io/part-of: homelab-portfolio

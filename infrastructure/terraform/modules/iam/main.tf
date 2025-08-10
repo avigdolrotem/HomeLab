@@ -65,6 +65,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
           "secretsmanager:CreateSecret",
           "secretsmanager:UpdateSecret",
           "secretsmanager:PutSecretValue",
+          "secretsmanager:DeleteSecret",
           "secretsmanager:GetResourcePolicy",
           "secretsmanager:PutResourcePolicy",
           "secretsmanager:DeleteResourcePolicy",
@@ -72,7 +73,8 @@ resource "aws_iam_role_policy" "ec2_policy" {
         ]
         Resource = [
           var.secrets_manager_arns,
-          "arn:aws:secretsmanager:*:*:secret:homelab-dev-*-db-*"
+          "arn:aws:secretsmanager:*:*:secret:homelab-dev-*-db-*",
+          "arn:aws:secretsmanager:*:*:secret:homelab-dev-admin-passwords-*"
         ]
       },
       {
@@ -106,7 +108,17 @@ resource "aws_iam_role_policy" "ec2_policy" {
           "rds:DescribeDBClusters"
         ]
         Resource = "*"
-      }
+      },
+      {
+        Sid    =  "Route53Access"
+        Effect = "Allow"
+        Action = [
+          "route53:ListHostedZones",
+          "route53:GetChange",
+          "route53:ChangeResourceRecordSets"
+        ]
+        Resource = "*"
+}
     ]
   })
 }

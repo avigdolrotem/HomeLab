@@ -1,0 +1,35 @@
+# applications/kubernetes/manifests/02-external-secrets/jenkins-db.yaml
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: jenkins-db
+  namespace: homelab
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: SecretStore
+  target:
+    name: jenkins-db
+    creationPolicy: Owner
+  data:
+    - secretKey: DATABASE_URL
+      remoteRef:
+        key: homelab-dev-jenkins-db
+        property: url
+    - secretKey: DB_HOST
+      remoteRef:
+        key: homelab-dev-jenkins-db
+        property: host
+    - secretKey: DB_NAME
+      remoteRef:
+        key: homelab-dev-jenkins-db
+        property: database
+    - secretKey: DB_USER
+      remoteRef:
+        key: homelab-dev-jenkins-db
+        property: username
+    - secretKey: DB_PASSWORD
+      remoteRef:
+        key: homelab-dev-jenkins-db
+        property: password

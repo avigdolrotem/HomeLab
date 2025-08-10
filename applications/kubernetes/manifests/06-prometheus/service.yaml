@@ -1,0 +1,14 @@
+# applications/kubernetes/manifests/04-prometheus/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: homelab
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - port: 9090
+    targetPort: 9090
