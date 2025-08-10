@@ -13,6 +13,6 @@ terraform apply -auto-approve
 # Configure with Ansible  
 echo "⚙️ Configuring with Ansible..."
 cd ../../../ansible
-ansible-playbook -i inventories/aws_ec2.yml playbooks/site.yml
+ansible-playbook -i inventories/aws_ec2.yml playbooks/site.yml -e deployment_mode=k8s
 
 echo "✅ Deployment complete!"

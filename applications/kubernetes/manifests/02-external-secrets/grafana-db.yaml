@@ -1,0 +1,31 @@
+# applications/kubernetes/manifests/02-external-secrets/grafana-db.yaml
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-db
+  namespace: homelab
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: SecretStore
+  target:
+    name: grafana-db
+    creationPolicy: Owner
+  data:
+    - secretKey: GF_DATABASE_HOST
+      remoteRef:
+        key: homelab-dev-grafana-db
+        property: host
+    - secretKey: GF_DATABASE_NAME
+      remoteRef:
+        key: homelab-dev-grafana-db
+        property: database
+    - secretKey: GF_DATABASE_USER
+      remoteRef:
+        key: homelab-dev-grafana-db
+        property: username
+    - secretKey: GF_DATABASE_PASSWORD
+      remoteRef:
+        key: homelab-dev-grafana-db
+        property: password

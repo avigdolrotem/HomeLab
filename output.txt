@@ -1,99 +1,154 @@
-ubuntu@ip-10-0-1-88:~$ get-db-secret "homelab-dev-vaultwarden-db"
-echo "---"
-get-db-secret "homelab-dev-vaultwarden-db" | xxd  # Show raw bytes
-{'host': 'homelab-dev-postgres.cu3sw4eky9tq.us-east-1.rds.amazonaws.com', 'port': '5432', 'database': 'vaultwarden', 'username': 'vaultwarden_user', 'password': 'IeeG6kr91hD5S4TRjRXUoKVESaIDxbtp', 'url': 'postgresql://vaultwarden_user:IeeG6kr91hD5S4TRjRXUoKVESaIDxbtp@homelab-dev-postgres.cu3sw4eky9tq.us-east-1.rds.amazonaws.com:5432/vaultwarden'}
----
-00000000: 7b27 686f 7374 273a 2027 686f 6d65 6c61  {'host': 'homela
-00000010: 622d 6465 762d 706f 7374 6772 6573 2e63  b-dev-postgres.c
-00000020: 7533 7377 3465 6b79 3974 712e 7573 2d65  u3sw4eky9tq.us-e
-00000030: 6173 742d 312e 7264 732e 616d 617a 6f6e  ast-1.rds.amazon
-00000040: 6177 732e 636f 6d27 2c20 2770 6f72 7427  aws.com', 'port'
-00000050: 3a20 2735 3433 3227 2c20 2764 6174 6162  : '5432', 'datab
-00000060: 6173 6527 3a20 2776 6175 6c74 7761 7264  ase': 'vaultward
-00000070: 656e 272c 2027 7573 6572 6e61 6d65 273a  en', 'username':
-00000080: 2027 7661 756c 7477 6172 6465 6e5f 7573   'vaultwarden_us
-00000090: 6572 272c 2027 7061 7373 776f 7264 273a  er', 'password':
-000000a0: 2027 4965 6547 366b 7239 3168 4435 5334   'IeeG6kr91hD5S4
-000000b0: 5452 6a52 5855 6f4b 5645 5361 4944 7862  TRjRXUoKVESaIDxb
-000000c0: 7470 272c 2027 7572 6c27 3a20 2770 6f73  tp', 'url': 'pos
-000000d0: 7467 7265 7371 6c3a 2f2f 7661 756c 7477  tgresql://vaultw
-000000e0: 6172 6465 6e5f 7573 6572 3a49 6565 4736  arden_user:IeeG6
-000000f0: 6b72 3931 6844 3553 3454 526a 5258 556f  kr91hD5S4TRjRXUo
-00000100: 4b56 4553 6149 4478 6274 7040 686f 6d65  KVESaIDxbtp@home
-00000110: 6c61 622d 6465 762d 706f 7374 6772 6573  lab-dev-postgres
-00000120: 2e63 7533 7377 3465 6b79 3974 712e 7573  .cu3sw4eky9tq.us
-00000130: 2d65 6173 742d 312e 7264 732e 616d 617a  -east-1.rds.amaz
-00000140: 6f6e 6177 732e 636f 6d3a 3534 3332 2f76  onaws.com:5432/v
-00000150: 6175 6c74 7761 7264 656e 277d 0a         aultwarden'}.
-ubuntu@ip-10-0-1-88:~$ aws secretsmanager get-secret-value --secret-id homelab-dev-vaultwarden-db --query SecretString --output text
-{'host': 'homelab-dev-postgres.cu3sw4eky9tq.us-east-1.rds.amazonaws.com', 'port': '5432', 'database': 'vaultwarden', 'username': 'vaultwarden_user', 'password': 'IeeG6kr91hD5S4TRjRXUoKVESaIDxbtp', 'url': 'postgresql://vaultwarden_user:IeeG6kr91hD5S4TRjRXUoKVESaIDxbtp@homelab-dev-postgres.cu3sw4eky9tq.us-east-1.rds.amazonaws.com:5432/vaultwarden'}
-ubuntu@ip-10-0-1-88:~$ aws secretsmanager get-secret-value --secret-id homelab-dev-vaultwarden-db --query SecretString --output text | jq .
-parse error: Invalid numeric literal at line 1, column 8
-
-rotem@Home:~/Repositories/homelab/infrastructure/terraform/environments/dev$ terraform show | grep -A 20 -B 5 "iam_role_policy"
-            }
-        )
-    }
-}
-
-# module.iam.aws_iam_role_policy.ec2_policy:
-resource "aws_iam_role_policy" "ec2_policy" {
-    id          = "homelab-dev-ec2-role:homelab-dev-ec2-policy"
-    name        = "homelab-dev-ec2-policy"
-    name_prefix = null
-    policy      = jsonencode(
-        {
-            Statement = [
-                {
-                    Action   = [
-                        "s3:GetObject",
-                        "s3:PutObject",
-                        "s3:DeleteObject",
-                        "s3:ListBucket",
-                    ]
-                    Effect   = "Allow"
-                    Resource = [
-                        "arn:aws:s3:::homelab-backups-874888505976",
-                        "arn:aws:s3:::homelab-backups-874888505976/*",
-                    ]
-                },
-                {
---
-            }
-        )
-    }
-}
-
-# module.lambda_scheduler.aws_iam_role_policy.lambda_policy:
-resource "aws_iam_role_policy" "lambda_policy" {
-    id          = "homelab-dev-lambda-role:homelab-dev-lambda-policy"
-    name        = "homelab-dev-lambda-policy"
-    name_prefix = null
-    policy      = jsonencode(
-        {
-            Statement = [
-                {
-                    Action   = [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents",
-                    ]
-                    Effect   = "Allow"
-                    Resource = "arn:aws:logs:*:*:*"
-                },
-                {
-                    Action   = [
-                        "ec2:StartInstances",
-                        "ec2:StopInstances",
-                        "ec2:DescribeInstances",
-
-ubuntu@ip-10-0-1-88:~$ docker compose logs vaultwarden 2>&1 | head -20
-docker compose logs nextcloud 2>&1 | head -20
-docker compose logs grafana 2>&1 | head -20
-no configuration file provided: not found
-no configuration file provided: not found
-no configuration file provided: not found
-ubuntu@ip-10-0-1-88:~$ docker compose exec vaultwarden env | grep -i db
-docker compose exec nextcloud env | grep -i db
-no configuration file provided: not found
-no configuration file provided: not found
+ubuntu@ip-10-0-1-145:~$ kubectl logs caddy-58db8f6dbd-8fpzv -n homelab
+{"level":"info","ts":1754839065.371256,"msg":"using provided configuration","config_file":"/etc/caddy/Caddyfile","config_adapter":"caddyfile"}
+{"level":"warn","ts":1754839065.3913403,"msg":"Caddyfile input is not formatted; run 'caddy fmt --overwrite' to fix inconsistencies","adapter":"caddyfile","file":"/etc/caddy/Caddyfile","line":3}
+{"level":"info","ts":1754839065.3929589,"logger":"admin","msg":"admin endpoint started","address":"localhost:2019","enforce_origin":false,"origins":["//localhost:2019","//[::1]:2019","//127.0.0.1:2019"]}
+{"level":"info","ts":1754839065.3933644,"logger":"http.auto_https","msg":"server is listening only on the HTTPS port but has no TLS connection policies; adding one to enable TLS","server_name":"srv0","https_port":443}
+{"level":"info","ts":1754839065.393457,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0xc000449f80"}
+{"level":"info","ts":1754839065.393506,"logger":"http.auto_https","msg":"enabling automatic HTTP->HTTPS redirects","server_name":"srv0"}
+{"level":"info","ts":1754839065.394552,"logger":"http","msg":"enabling HTTP/3 listener","addr":":443"}
+{"level":"info","ts":1754839065.394667,"msg":"failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 2048 kiB, got: 416 kiB). See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details."}
+{"level":"info","ts":1754839065.3949742,"logger":"http.log","msg":"server running","name":"srv0","protocols":["h1","h2","h3"]}
+{"level":"info","ts":1754839065.395031,"logger":"http.log","msg":"server running","name":"remaining_auto_https_redirects","protocols":["h1","h2","h3"]}
+{"level":"info","ts":1754839065.3950856,"logger":"http","msg":"enabling automatic TLS certificate management","domains":["jenkins.avigdol.com","monitor.avigdol.com","files.avigdol.com","passwords.avigdol.com"]}
+{"level":"info","ts":1754839065.395389,"msg":"autosaved config (load with --resume flag)","file":"/config/caddy/autosave.json"}
+{"level":"info","ts":1754839065.3954027,"msg":"serving initial configuration"}
+{"level":"info","ts":1754839065.395743,"logger":"tls.obtain","msg":"acquiring lock","identifier":"jenkins.avigdol.com"}
+{"level":"warn","ts":1754839065.3987591,"logger":"tls","msg":"storage cleaning happened too recently; skipping for now","storage":"FileStorage:/data/caddy","instance":"6cfd607d-2659-487c-b328-7b578e6207dd","try_again":1754925465.3987541,"try_again_in":86399.999999311}
+{"level":"info","ts":1754839065.399623,"logger":"tls","msg":"finished cleaning storage units"}
+{"level":"info","ts":1754839065.4000638,"logger":"tls.obtain","msg":"acquiring lock","identifier":"monitor.avigdol.com"}
+{"level":"info","ts":1754839065.4010866,"logger":"tls.obtain","msg":"lock acquired","identifier":"jenkins.avigdol.com"}
+{"level":"info","ts":1754839065.4012272,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"jenkins.avigdol.com"}
+{"level":"info","ts":1754839065.464465,"logger":"tls.obtain","msg":"acquiring lock","identifier":"files.avigdol.com"}
+{"level":"info","ts":1754839065.4657414,"logger":"tls.issuance.acme","msg":"waiting on internal rate limiter","identifiers":["jenkins.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.4658422,"logger":"tls.issuance.acme","msg":"done waiting on internal rate limiter","identifiers":["jenkins.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.4672482,"logger":"tls.obtain","msg":"lock acquired","identifier":"monitor.avigdol.com"}
+{"level":"info","ts":1754839065.4782639,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"monitor.avigdol.com"}
+{"level":"info","ts":1754839065.468225,"logger":"tls.obtain","msg":"acquiring lock","identifier":"passwords.avigdol.com"}
+{"level":"info","ts":1754839065.4695258,"logger":"tls.obtain","msg":"lock acquired","identifier":"files.avigdol.com"}
+{"level":"info","ts":1754839065.481589,"logger":"tls.issuance.acme","msg":"waiting on internal rate limiter","identifiers":["monitor.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.4817853,"logger":"tls.issuance.acme","msg":"done waiting on internal rate limiter","identifiers":["monitor.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.4817438,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"files.avigdol.com"}
+{"level":"info","ts":1754839065.4823797,"logger":"tls.issuance.acme","msg":"waiting on internal rate limiter","identifiers":["files.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.4824624,"logger":"tls.issuance.acme","msg":"done waiting on internal rate limiter","identifiers":["files.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.485995,"logger":"tls.obtain","msg":"lock acquired","identifier":"passwords.avigdol.com"}
+{"level":"info","ts":1754839065.4862082,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"passwords.avigdol.com"}
+{"level":"info","ts":1754839065.486751,"logger":"tls.issuance.acme","msg":"waiting on internal rate limiter","identifiers":["passwords.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.4869983,"logger":"tls.issuance.acme","msg":"done waiting on internal rate limiter","identifiers":["passwords.avigdol.com"],"ca":"https://acme-staging-v02.api.letsencrypt.org/directory","account":"admin@avigdol.com"}
+{"level":"info","ts":1754839065.888058,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"jenkins.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839065.9389443,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"monitor.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839065.9891543,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"files.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839066.0376987,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"passwords.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"error","ts":1754839066.2473798,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"jenkins.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://jenkins.avigdol.com/.well-known/acme-challenge/OHAw4cABME5nmer9SEzyMLAvheS8D5c3WSXO6D3JnG0: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839066.2474124,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"jenkins.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://jenkins.avigdol.com/.well-known/acme-challenge/OHAw4cABME5nmer9SEzyMLAvheS8D5c3WSXO6D3JnG0: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622233","attempt":1,"max_attempts":3}
+{"level":"error","ts":1754839066.3484998,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"files.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://files.avigdol.com/.well-known/acme-challenge/s6HRKCJmVLBwwhyQ6GdM97lO2Ya3RH3C0wC3AOQWKPM: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839066.3485394,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"files.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://files.avigdol.com/.well-known/acme-challenge/s6HRKCJmVLBwwhyQ6GdM97lO2Ya3RH3C0wC3AOQWKPM: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622303","attempt":1,"max_attempts":3}
+{"level":"error","ts":1754839066.3965,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"passwords.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://passwords.avigdol.com/.well-known/acme-challenge/_GraiupMYd-THHbUzDY1KAUnWya7MXTlsurmtSVKmJ8: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839066.3965313,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"passwords.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://passwords.avigdol.com/.well-known/acme-challenge/_GraiupMYd-THHbUzDY1KAUnWya7MXTlsurmtSVKmJ8: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622343","attempt":1,"max_attempts":3}
+{"level":"error","ts":1754839066.6019378,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"monitor.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://monitor.avigdol.com/.well-known/acme-challenge/We8Z0n2nmfjsWKizGjcu-Jmlzvs1B7g-Ohy0BlMtStI: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839066.6019707,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"monitor.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://monitor.avigdol.com/.well-known/acme-challenge/We8Z0n2nmfjsWKizGjcu-Jmlzvs1B7g-Ohy0BlMtStI: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622243","attempt":1,"max_attempts":3}
+{"level":"info","ts":1754839067.3611686,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"jenkins.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839067.46313,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"files.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839067.5115678,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"passwords.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839067.7171042,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"monitor.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"error","ts":1754839067.720497,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"jenkins.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839067.720539,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"jenkins.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622503","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839067.7205641,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"jenkins.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused"}
+{"level":"error","ts":1754839067.7205873,"logger":"tls.obtain","msg":"will retry","error":"[jenkins.avigdol.com] Obtain: [jenkins.avigdol.com] solving challenge: jenkins.avigdol.com: [jenkins.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":1,"retrying_in":60,"elapsed":2.319468865,"max_duration":2592000}
+{"level":"error","ts":1754839067.8221846,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"files.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839067.82225,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"files.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622523","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839067.8224142,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"files.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused"}
+{"level":"error","ts":1754839067.8224435,"logger":"tls.obtain","msg":"will retry","error":"[files.avigdol.com] Obtain: [files.avigdol.com] solving challenge: files.avigdol.com: [files.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":1,"retrying_in":60,"elapsed":2.341241498,"max_duration":2592000}
+{"level":"error","ts":1754839067.8703623,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"passwords.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839067.8703988,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"passwords.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622543","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839067.8704293,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"passwords.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused"}
+{"level":"error","ts":1754839067.870461,"logger":"tls.obtain","msg":"will retry","error":"[passwords.avigdol.com] Obtain: [passwords.avigdol.com] solving challenge: passwords.avigdol.com: [passwords.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":1,"retrying_in":60,"elapsed":2.384364509,"max_duration":2592000}
+{"level":"error","ts":1754839068.0759351,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"monitor.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839068.0759718,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"monitor.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557622613","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839068.0759966,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"monitor.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused"}
+{"level":"error","ts":1754839068.0760193,"logger":"tls.obtain","msg":"will retry","error":"[monitor.avigdol.com] Obtain: [monitor.avigdol.com] solving challenge: monitor.avigdol.com: [monitor.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":1,"retrying_in":60,"elapsed":2.59783923,"max_duration":2592000}
+{"level":"info","ts":1754839127.7219813,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"jenkins.avigdol.com"}
+{"level":"info","ts":1754839127.8234744,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"files.avigdol.com"}
+{"level":"info","ts":1754839127.8710864,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"passwords.avigdol.com"}
+{"level":"info","ts":1754839127.887724,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"jenkins.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839127.992053,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"files.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839128.0391288,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"passwords.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839128.0767837,"logger":"tls.obtain","msg":"obtaining certificate","identifier":"monitor.avigdol.com"}
+{"level":"info","ts":1754839128.2410803,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"monitor.avigdol.com","challenge_type":"tls-alpn-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"error","ts":1754839128.2836301,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"jenkins.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839128.2837164,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"jenkins.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637023","attempt":1,"max_attempts":3}
+{"level":"error","ts":1754839128.3515453,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"files.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839128.3518457,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"files.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637063","attempt":1,"max_attempts":3}
+{"level":"error","ts":1754839128.3994627,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"passwords.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839128.3994937,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"passwords.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637083","attempt":1,"max_attempts":3}
+{"level":"error","ts":1754839128.6002293,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"monitor.avigdol.com","challenge_type":"tls-alpn-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839128.6002605,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"monitor.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637153","attempt":1,"max_attempts":3}
+{"level":"info","ts":1754839129.396188,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"jenkins.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839129.4646652,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"files.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839129.5143132,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"passwords.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"info","ts":1754839129.7127721,"logger":"tls.issuance.acme.acme_client","msg":"trying to solve challenge","identifier":"monitor.avigdol.com","challenge_type":"http-01","ca":"https://acme-staging-v02.api.letsencrypt.org/directory"}
+{"level":"error","ts":1754839129.7547493,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"jenkins.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://jenkins.avigdol.com/.well-known/acme-challenge/gzQ2WysZpJ7-7vTngsSc62QzYpMWuy0UxV-XRrGMNzU: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839129.754954,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"jenkins.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://jenkins.avigdol.com/.well-known/acme-challenge/gzQ2WysZpJ7-7vTngsSc62QzYpMWuy0UxV-XRrGMNzU: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637443","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839129.7549837,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"jenkins.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://jenkins.avigdol.com/.well-known/acme-challenge/gzQ2WysZpJ7-7vTngsSc62QzYpMWuy0UxV-XRrGMNzU: Connection refused"}
+{"level":"error","ts":1754839129.755015,"logger":"tls.obtain","msg":"will retry","error":"[jenkins.avigdol.com] Obtain: [jenkins.avigdol.com] solving challenge: jenkins.avigdol.com: [jenkins.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://jenkins.avigdol.com/.well-known/acme-challenge/gzQ2WysZpJ7-7vTngsSc62QzYpMWuy0UxV-XRrGMNzU: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":2,"retrying_in":120,"elapsed":64.353896082,"max_duration":2592000}
+{"level":"error","ts":1754839129.823596,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"files.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://files.avigdol.com/.well-known/acme-challenge/oUvmYic4hkmJ5qEgvgfkPtkv98wInOr4twQrliT5eG8: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839129.8236296,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"files.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://files.avigdol.com/.well-known/acme-challenge/oUvmYic4hkmJ5qEgvgfkPtkv98wInOr4twQrliT5eG8: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637483","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839129.823663,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"files.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://files.avigdol.com/.well-known/acme-challenge/oUvmYic4hkmJ5qEgvgfkPtkv98wInOr4twQrliT5eG8: Connection refused"}
+{"level":"error","ts":1754839129.8236873,"logger":"tls.obtain","msg":"will retry","error":"[files.avigdol.com] Obtain: [files.avigdol.com] solving challenge: files.avigdol.com: [files.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://files.avigdol.com/.well-known/acme-challenge/oUvmYic4hkmJ5qEgvgfkPtkv98wInOr4twQrliT5eG8: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":2,"retrying_in":120,"elapsed":64.342485568,"max_duration":2592000}
+{"level":"error","ts":1754839129.8740792,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"passwords.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://passwords.avigdol.com/.well-known/acme-challenge/cwod6iMu5ahn8MsgDNPQzmQX-2CejgsXoKlutg13cag: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839129.8741117,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"passwords.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://passwords.avigdol.com/.well-known/acme-challenge/cwod6iMu5ahn8MsgDNPQzmQX-2CejgsXoKlutg13cag: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637493","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839129.8741333,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"passwords.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://passwords.avigdol.com/.well-known/acme-challenge/cwod6iMu5ahn8MsgDNPQzmQX-2CejgsXoKlutg13cag: Connection refused"}
+{"level":"error","ts":1754839129.8741627,"logger":"tls.obtain","msg":"will retry","error":"[passwords.avigdol.com] Obtain: [passwords.avigdol.com] solving challenge: passwords.avigdol.com: [passwords.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://passwords.avigdol.com/.well-known/acme-challenge/cwod6iMu5ahn8MsgDNPQzmQX-2CejgsXoKlutg13cag: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":2,"retrying_in":120,"elapsed":64.388066723,"max_duration":2592000}
+{"level":"error","ts":1754839130.070583,"logger":"tls.issuance.acme.acme_client","msg":"challenge failed","identifier":"monitor.avigdol.com","challenge_type":"http-01","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://monitor.avigdol.com/.well-known/acme-challenge/nEJqi4tUZdAvITblvsg8hQJpPQ1jbhOuUxsjUUPzBBA: Connection refused","instance":"","subproblems":[]}}
+{"level":"error","ts":1754839130.0706193,"logger":"tls.issuance.acme.acme_client","msg":"validating authorization","identifier":"monitor.avigdol.com","problem":{"type":"urn:ietf:params:acme:error:connection","title":"","detail":"100.28.167.243: Fetching http://monitor.avigdol.com/.well-known/acme-challenge/nEJqi4tUZdAvITblvsg8hQJpPQ1jbhOuUxsjUUPzBBA: Connection refused","instance":"","subproblems":[]},"order":"https://acme-staging-v02.api.letsencrypt.org/acme/order/219690753/26557637543","attempt":2,"max_attempts":3}
+{"level":"error","ts":1754839130.0706503,"logger":"tls.obtain","msg":"could not get certificate from issuer","identifier":"monitor.avigdol.com","issuer":"acme-staging-v02.api.letsencrypt.org-directory","error":"HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://monitor.avigdol.com/.well-known/acme-challenge/nEJqi4tUZdAvITblvsg8hQJpPQ1jbhOuUxsjUUPzBBA: Connection refused"}
+{"level":"error","ts":1754839130.07068,"logger":"tls.obtain","msg":"will retry","error":"[monitor.avigdol.com] Obtain: [monitor.avigdol.com] solving challenge: monitor.avigdol.com: [monitor.avigdol.com] authorization failed: HTTP 400 urn:ietf:params:acme:error:connection - 100.28.167.243: Fetching http://monitor.avigdol.com/.well-known/acme-challenge/nEJqi4tUZdAvITblvsg8hQJpPQ1jbhOuUxsjUUPzBBA: Connection refused (ca=https://acme-staging-v02.api.letsencrypt.org/directory)","attempt":2,"retrying_in":120,"elapsed":64.59249942,"max_duration":2592000}
+{"level":"info","ts":1754839184.9961092,"msg":"shutting down apps, then terminating","signal":"SIGTERM"}
+{"level":"warn","ts":1754839184.9961674,"msg":"exiting; byeee!! 👋","signal":"SIGTERM"}
+{"level":"info","ts":1754839184.9962356,"logger":"http","msg":"servers shutting down with eternal grace period"}
+{"level":"info","ts":1754839184.9965878,"logger":"admin","msg":"stopped previous server","address":"localhost:2019"}
+{"level":"info","ts":1754839184.9966016,"msg":"shutdown complete","signal":"SIGTERM","exit_code":0}
+ubuntu@ip-10-0-1-145:~$ kubectl get configmap caddyfile -n homelab -o yaml
+apiVersion: v1
+data:
+  Caddyfile: "# Global options\n{\n    # Email for Let's Encrypt\n    email admin@avigdol.com\n
+    \   \n    # ACME server (staging for testing)\n    acme_ca https://acme-staging-v02.api.letsencrypt.org/directory\n
+    \   \n    # Production Let's Encrypt (comment staging, uncomment this when ready)\n
+    \   # acme_ca https://acme-v02.api.letsencrypt.org/directory\n}\n\n# Vaultwarden
+    - Password Manager\npasswords.avigdol.com {\n    reverse_proxy vaultwarden.homelab.svc.cluster.local:80\n
+    \   \n    # WebSocket support for notifications\n    @websockets {\n        header
+    Connection *Upgrade*\n        header Upgrade websocket\n    }\n    reverse_proxy
+    @websockets vaultwarden.homelab.svc.cluster.local:3012\n    \n    # Security headers\n
+    \   header {\n        # HSTS\n        Strict-Transport-Security max-age=31536000;\n
+    \       # Prevent clickjacking\n        X-Frame-Options DENY\n        # XSS protection\n
+    \       X-XSS-Protection \"1; mode=block\"\n        # Content type sniffing\n
+    \       X-Content-Type-Options nosniff\n        # Referrer policy\n        Referrer-Policy
+    same-origin\n    }\n}\n\n# Nextcloud - File Sync\nfiles.avigdol.com {\n    reverse_proxy
+    nextcloud.homelab.svc.cluster.local:80\n    \n    # Handle well-known paths for
+    CardDAV and CalDAV\n    redir /.well-known/carddav /remote.php/dav permanent\n
+    \   redir /.well-known/caldav /remote.php/dav permanent\n    \n    # Security
+    headers for Nextcloud\n    header {\n        # HSTS\n        Strict-Transport-Security
+    max-age=31536000;\n        # Allow framing only from same origin (for embedding)\n
+    \       X-Frame-Options SAMEORIGIN\n        # XSS protection\n        X-XSS-Protection
+    \"1; mode=block\"\n        # Content type sniffing\n        X-Content-Type-Options
+    nosniff\n        # Referrer policy\n        Referrer-Policy same-origin\n        #
+    Remove server header\n        -Server\n    }\n    \n    # Handle large file uploads\n
+    \   request_body {\n        max_size 512MB\n    }\n}\n\n# Jenkins - CI/CD\njenkins.avigdol.com
+    {\n    reverse_proxy jenkins.homelab.svc.cluster.local:8080\n    \n    # Security
+    headers\n    header {\n        # HSTS\n        Strict-Transport-Security max-age=31536000;\n
+    \       # XSS protection\n        X-XSS-Protection \"1; mode=block\"\n        #
+    Content type sniffing\n        X-Content-Type-Options nosniff\n    }\n}\n\n# Grafana
+    - Monitoring Dashboard\nmonitor.avigdol.com {\n    reverse_proxy grafana.homelab.svc.cluster.local:3000\n
+    \   \n    # Security headers\n    header {\n        # HSTS\n        Strict-Transport-Security
+    max-age=31536000;\n        # Allow framing for Grafana panels\n        X-Frame-Options
+    SAMEORIGIN\n        # XSS protection\n        X-XSS-Protection \"1; mode=block\"\n
+    \       # Content type sniffing\n        X-Content-Type-Options nosniff\n    }\n}\n"
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"Caddyfile":"# Global options\n{\n    # Email for Let's Encrypt\n    email admin@avigdol.com\n    \n    # ACME server (staging for testing)\n    acme_ca https://acme-staging-v02.api.letsencrypt.org/directory\n    \n    # Production Let's Encrypt (comment staging, uncomment this when ready)\n    # acme_ca https://acme-v02.api.letsencrypt.org/directory\n}\n\n# Vaultwarden - Password Manager\npasswords.avigdol.com {\n    reverse_proxy vaultwarden.homelab.svc.cluster.local:80\n    \n    # WebSocket support for notifications\n    @websockets {\n        header Connection *Upgrade*\n        header Upgrade websocket\n    }\n    reverse_proxy @websockets vaultwarden.homelab.svc.cluster.local:3012\n    \n    # Security headers\n    header {\n        # HSTS\n        Strict-Transport-Security max-age=31536000;\n        # Prevent clickjacking\n        X-Frame-Options DENY\n        # XSS protection\n        X-XSS-Protection \"1; mode=block\"\n        # Content type sniffing\n        X-Content-Type-Options nosniff\n        # Referrer policy\n        Referrer-Policy same-origin\n    }\n}\n\n# Nextcloud - File Sync\nfiles.avigdol.com {\n    reverse_proxy nextcloud.homelab.svc.cluster.local:80\n    \n    # Handle well-known paths for CardDAV and CalDAV\n    redir /.well-known/carddav /remote.php/dav permanent\n    redir /.well-known/caldav /remote.php/dav permanent\n    \n    # Security headers for Nextcloud\n    header {\n        # HSTS\n        Strict-Transport-Security max-age=31536000;\n        # Allow framing only from same origin (for embedding)\n        X-Frame-Options SAMEORIGIN\n        # XSS protection\n        X-XSS-Protection \"1; mode=block\"\n        # Content type sniffing\n        X-Content-Type-Options nosniff\n        # Referrer policy\n        Referrer-Policy same-origin\n        # Remove server header\n        -Server\n    }\n    \n    # Handle large file uploads\n    request_body {\n        max_size 512MB\n    }\n}\n\n# Jenkins - CI/CD\njenkins.avigdol.com {\n    reverse_proxy jenkins.homelab.svc.cluster.local:8080\n    \n    # Security headers\n    header {\n        # HSTS\n        Strict-Transport-Security max-age=31536000;\n        # XSS protection\n        X-XSS-Protection \"1; mode=block\"\n        # Content type sniffing\n        X-Content-Type-Options nosniff\n    }\n}\n\n# Grafana - Monitoring Dashboard\nmonitor.avigdol.com {\n    reverse_proxy grafana.homelab.svc.cluster.local:3000\n    \n    # Security headers\n    header {\n        # HSTS\n        Strict-Transport-Security max-age=31536000;\n        # Allow framing for Grafana panels\n        X-Frame-Options SAMEORIGIN\n        # XSS protection\n        X-XSS-Protection \"1; mode=block\"\n        # Content type sniffing\n        X-Content-Type-Options nosniff\n    }\n}\n"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"caddyfile","namespace":"homelab"}}
+  creationTimestamp: "2025-08-10T14:36:40Z"
+  name: caddyfile
+  namespace: homelab
+  resourceVersion: "9875"
+  uid: 70614f10-1f12-49ef-8e46-dc955702314f

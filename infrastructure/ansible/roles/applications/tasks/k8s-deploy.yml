@@ -1,57 +1,12 @@
-# Kubernetes deployment tasks - FIXED
-
-- name: Install External Secrets Operator
-  shell: |
-    helm repo add external-secrets https://charts.external-secrets.io
-    helm repo update
-    helm upgrade --install external-secrets \
-      external-secrets/external-secrets \
-      --namespace external-secrets-system \
-      --create-namespace \
-      --set installCRDs=true
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
+# infrastructure/ansible/roles/applications/tasks/k8s-deploy.yml
+# External Secrets Operator version
 
 - name: Create homelab namespace
-  command: kubectl create namespace homelab
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-  ignore_errors: true
-
-- name: Get AWS credentials from instance role
-  shell: |
-    # Get role name
-    ROLE_NAME=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/)
-    
-    # Get all credentials in one call
-    AWS_CREDS=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE_NAME)
-    
-    # Extract values
-    ACCESS_KEY=$(echo $AWS_CREDS | jq -r '.AccessKeyId')
-    SECRET_KEY=$(echo $AWS_CREDS | jq -r '.SecretAccessKey')
-    SESSION_TOKEN=$(echo $AWS_CREDS | jq -r '.Token')
-    
-    # Create the secret
-    kubectl create secret generic aws-credentials \
-      --from-literal=access-key-id="$ACCESS_KEY" \
-      --from-literal=secret-access-key="$SECRET_KEY" \
-      --from-literal=session-token="$SESSION_TOKEN" \
-      --namespace=homelab \
-      --dry-run=client -o yaml | kubectl apply -f -
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-
-- name: Apply namespace and External Secrets configuration
-  command: kubectl apply -f {{ item }}
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-  loop:
-    - /home/ubuntu/homelab/kubernetes/namespace.yaml
-    - /home/ubuntu/homelab/kubernetes/external-secrets/
+  kubernetes.core.k8s:
+    name: homelab
+    api_version: v1
+    kind: Namespace
+    state: present
 
 - name: Generate admin passwords for applications
   set_fact:
@@ -59,107 +14,197 @@
       nextcloud: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
       grafana: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
       jenkins: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+      redis: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
 
-- name: Create admin password secrets with correct key names
-  shell: |
-    kubectl create secret generic {{ item.key }}-admin-secret \
-      --from-literal={{ item.key | upper }}_ADMIN_PASS={{ item.value }} \
-      {% if item.key == 'grafana' %}--from-literal=admin-user=admin \
-      --from-literal=admin-password={{ item.value }}{% endif %} \
-      {% if item.key == 'jenkins' %}--from-literal=jenkins-admin-user=admin \
-      --from-literal=jenkins-admin-password={{ item.value }}{% endif %} \
-      --namespace=homelab \
-      --dry-run=client -o yaml | kubectl apply -f -
-  loop: "{{ app_admin_passwords | dict2items }}"
+- name: Wait for RDS to be available
+  wait_for:
+    host: "{{ rds_endpoint.split(':')[0] }}"
+    port: 5432
+    timeout: 300
+    delay: 10
+
+- name: Install External Secrets Operator
+  kubernetes.core.helm:
+    name: external-secrets
+    chart_ref: external-secrets
+    release_namespace: external-secrets-system
+    create_namespace: true
+    chart_repo_url: https://charts.external-secrets.io
+    release_state: present  # ← Add this explicit state
+    wait: true
+    wait_timeout: 300s
+
+- name: Store admin passwords in AWS Secrets Manager
+  community.aws.secretsmanager_secret:
+    name: "homelab-dev-admin-passwords"
+    description: "Admin passwords for HomeLab applications"
+    secret_type: string
+    region: us-east-1
+    secret: >-
+      {{
+        {
+          'nextcloud_password': app_admin_passwords.nextcloud,
+          'grafana_password': app_admin_passwords.grafana,
+          'jenkins_password': app_admin_passwords.jenkins,
+          'redis_password': app_admin_passwords.redis
+        } | to_json
+      }}
+    state: present
+
+- name: Apply Kubernetes manifests in order
+  command: kubectl apply -f {{ item }}
+  loop:
+    - "/home/ubuntu/homelab/kubernetes/manifests/00-namespace/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/01-secret-store/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/02-external-secrets/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/03-caddy/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/04-vaultwarden/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/05-nextcloud/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/06-prometheus/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/07-grafana/"
+    - "/home/ubuntu/homelab/kubernetes/manifests/08-jenkins/"
   become_user: ubuntu
   environment:
     HOME: /home/ubuntu
 
-- name: Add Helm repositories for official charts
-  shell: |
-    helm repo add grafana https://grafana.github.io/helm-charts
-    helm repo add jenkins https://charts.jenkins.io
-    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-    helm repo update
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-    
-- name: Clean up existing ingress-nginx resources
-  shell: |
-    # Delete existing ingress-nginx resources that might conflict
-    kubectl delete namespace ingress-nginx --ignore-not-found=true
-    kubectl delete clusterrole ingress-nginx --ignore-not-found=true
-    kubectl delete clusterrolebinding ingress-nginx --ignore-not-found=true
-    kubectl delete validatingwebhookconfiguration ingress-nginx-admission --ignore-not-found=true
-    kubectl delete ingressclass nginx --ignore-not-found=true
-    # Wait a moment for cleanup
-    sleep 10
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
+- name: Wait for External Secrets to create all secrets
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ item }}"
+    namespace: homelab
+    wait: true
+    wait_timeout: 120
+  loop:
+    - vaultwarden-db
+    - nextcloud-db
+    - nextcloud-admin
+    - grafana-db
+    - grafana-admin
+    - jenkins-db
+    - jenkins-admin
+    - redis-auth
+  register: secrets_check
+  until: secrets_check.resources | length > 0
+  retries: 10
+  delay: 10
   ignore_errors: true
 
-- name: Install ingress-nginx controller
-  shell: |
-    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-      --namespace ingress-nginx \
-      --create-namespace \
-      --set controller.service.type=NodePort \
-      --set controller.service.nodePorts.http=30080 \
-      --set controller.service.nodePorts.https=30443
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-
-- name: Deploy custom applications with Helm
-  shell: |
-    cd /home/ubuntu/homelab/kubernetes/helm/{{ item }}
-    helm upgrade --install {{ item }} . --namespace homelab --create-namespace
+- name: Wait for all deployments to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: homelab
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
   loop:
+    - caddy
     - vaultwarden
+    - redis
     - nextcloud
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-  register: helm_deploy_custom
-  ignore_errors: true
-
-- name: Deploy official chart applications
-  shell: |
-    cd /home/ubuntu/homelab/kubernetes/helm/{{ item }}
-    helm dependency update
-    helm upgrade --install {{ item }} . --namespace homelab --create-namespace
-  loop:
+    - prometheus
     - grafana
     - jenkins
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-  register: helm_deploy_official
   ignore_errors: true
 
-- name: Setup ingress port forwarding and iptables
-  shell: |
-    # Kill any existing port forwards
-    pkill -f "kubectl port-forward.*ingress-nginx-controller" || true
-    
-    # Start port forwarding in background
-    nohup kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 8080:80 8443:443 --address 0.0.0.0 > /dev/null 2>&1 &
-    
-    # Add iptables rules (check if they exist first)
-    iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080 || \
-    iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080
-    
-    iptables -t nat -C PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443 || \
-    iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443
-  become_user: ubuntu
+- name: Setup iptables rules for port redirection
+  iptables:
+    table: nat
+    chain: PREROUTING
+    protocol: tcp
+    destination_port: "{{ item.external }}"
+    jump: REDIRECT
+    to_ports: "{{ item.internal }}"
+    comment: "Redirect {{ item.external }} to NodePort {{ item.internal }}"
+  loop:
+    - external: "80"
+      internal: "30080"
+    - external: "443"
+      internal: "30443"
   become: yes
 
-- name: Display deployment status
+- name: Save iptables rules
+  shell: |
+    # Save iptables rules for persistence
+    mkdir -p /etc/iptables
+    iptables-save > /etc/iptables/rules.v4 || true
+    
+    # For systems with netfilter-persistent
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+      netfilter-persistent save || true
+    fi
+  become: yes
+  ignore_errors: true
+
+- name: Create iptables restore script
+  copy:
+    content: |
+      #!/bin/bash
+      # Restore iptables rules for Kubernetes port redirection
+      iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 30080 2>/dev/null || \
+      iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 30080
+      
+      iptables -t nat -C PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 30443 2>/dev/null || \
+      iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 30443
+    dest: /usr/local/bin/k8s-iptables-restore
+    mode: '0755'
+  become: yes
+
+- name: Create systemd service for iptables persistence
+  copy:
+    content: |
+      [Unit]
+      Description=Restore Kubernetes iptables rules
+      After=network.target
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/k8s-iptables-restore
+      RemainAfterExit=yes
+      
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/k8s-iptables.service
+  become: yes
+
+- name: Enable and start iptables service
+  systemd:
+    name: k8s-iptables
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Save admin credentials to file
+  copy:
+    content: |
+      # HomeLab Kubernetes Admin Passwords
+      # Generated: {{ ansible_date_time.iso8601 }}
+      
+      Nextcloud: admin / {{ app_admin_passwords.nextcloud }}
+      Grafana: admin / {{ app_admin_passwords.grafana }}
+      Jenkins: admin / {{ app_admin_passwords.jenkins }}
+      Redis: {{ app_admin_passwords.redis }}
+      
+      # Application URLs
+      https://passwords.avigdol.com
+      https://files.avigdol.com
+      https://monitor.avigdol.com
+      https://jenkins.avigdol.com
+    dest: /home/ubuntu/homelab-k8s-credentials.txt
+    mode: '0600'
+    owner: ubuntu
+    group: ubuntu
+
+- name: Display Kubernetes deployment status
   debug:
     msg:
-      - "☸️ Kubernetes deployment completed"
-      - "Check status: kubectl get pods -n homelab"
-      - "Check ingress: kubectl get ingress -n homelab"
-      - "Port forwarding enabled on 8080→80, 8443→443"
+      - "✅ Kubernetes applications deployed with External Secrets Operator"
+      - "🌐 URLs: https://passwords.avigdol.com, https://files.avigdol.com, https://monitor.avigdol.com, https://jenkins.avigdol.com"
+      - "🔑 Credentials saved to: /home/ubuntu/homelab-k8s-credentials.txt"
+      - "🔧 Management: kubectl get pods -n homelab"
+      - "🔐 Check secrets: kubectl get externalsecrets -n homelab"

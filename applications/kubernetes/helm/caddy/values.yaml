@@ -1,0 +1,32 @@
+replicaCount: 1
+
+image:
+  repository: caddy
+  tag: 2.8.4
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  httpNodePort: 31080
+  httpsNodePort: 31443
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Map hostnames to backend services
+# If your Helm release names differ, adjust "service" names here.
+hosts:
+  - host: vaultwarden.avigdol.com
+    service: vaultwarden
+    port: 80        # many charts expose 80 (targetPort 8080)
+  - host: files.avigdol.com
+    service: nextcloud
+    port: 80
+  - host: monitor.avigdol.com
+    service: grafana
+    port: 80        # grafana chart’s Service port is usually 80 -> targetPort 3000
+  - host: jenkins.avigdol.com
+    service: jenkins
+    port: 8080

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config
+data:
+  Caddyfile: |
+    {
+      email admin@avigdol.com
+      # Automatic HTTPS is on by default; global options here if needed
+    }
+
+    {{- range .Values.hosts }}
+    {{ .host }} {
+      reverse_proxy {{ .service }}.homelab.svc.cluster.local:{{ .port }}
+    }
+    {{- end }}

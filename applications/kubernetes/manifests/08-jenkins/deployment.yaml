@@ -1,0 +1,82 @@
+# applications/kubernetes/manifests/08-jenkins/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: homelab
+  labels:
+    app: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+      containers:
+      - name: jenkins
+        image: jenkins/jenkins:2.440.1-lts
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 50000
+          name: agent
+        env:
+        - name: JENKINS_OPTS
+          value: "--httpPort=8080"
+        - name: JAVA_OPTS
+          value: "-Xmx512m -XX:MaxRAM=512m"
+        - name: JENKINS_ADMIN_ID
+          value: "admin"
+        - name: JENKINS_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: jenkins-admin
+              key: JENKINS_ADMIN_PASS
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: jenkins-db
+              key: DATABASE_URL
+              optional: true
+        volumeMounts:
+        - name: jenkins-data
+          mountPath: /var/jenkins_home
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+          readOnly: true
+        resources:
+          limits:
+            cpu: 400m
+            memory: 768Mi
+          requests:
+            cpu: 200m
+            memory: 384Mi
+        livenessProbe:
+          httpGet:
+            path: /login
+            port: 8080
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /login
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: jenkins-data
+        persistentVolumeClaim:
+          claimName: jenkins-data
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket

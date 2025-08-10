@@ -1,0 +1,14 @@
+# applications/kubernetes/manifests/03-nextcloud/nextcloud-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: homelab
+  labels:
+    app: nextcloud
+spec:
+  selector:
+    app: nextcloud
+  ports:
+  - port: 80
+    targetPort: 80

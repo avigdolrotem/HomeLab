@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: caddy
+  labels: { app.kubernetes.io/name: caddy }
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: caddy
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: {{ .Values.service.httpNodePort }}
+    - name: https
+      port: 443
+      targetPort: https
+      nodePort: {{ .Values.service.httpsNodePort }}
