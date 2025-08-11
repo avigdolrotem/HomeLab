@@ -100,7 +100,7 @@
     wait_condition:
       type: Available
       status: "True"
-    wait_timeout: 300
+    wait_timeout: 120 
   loop:
     - caddy
     - vaultwarden

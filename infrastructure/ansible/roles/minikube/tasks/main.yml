@@ -53,7 +53,7 @@
     mode: '0755'
 
 - name: Start Minikube cluster
-  command: minikube start --driver=docker --cpus=2 --memory=2048mb
+  command: minikube start --driver=docker --cpus=4 --memory=6144mb
   become_user: ubuntu
   environment:
     HOME: /home/ubuntu
@@ -91,14 +91,3 @@
   retries: 5
   delay: 3
   register: kubectl_context
-
-- name: Enable Minikube addons
-  command: minikube addons enable {{ item }}
-  become_user: ubuntu
-  environment:
-    HOME: /home/ubuntu
-  loop:
-    - dashboard
-    - metrics-server
-    - ingress
-  ignore_errors: true

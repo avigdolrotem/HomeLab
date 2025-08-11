@@ -7,20 +7,31 @@ data:
   Caddyfile: |
     {
         email admin@avigdol.com
-        # PRODUCTION ACME
-        acme_ca https://acme-v02.api.letsencrypt.org/directory
-        # For testing:
-        # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
-        # (No acme_dns block -> HTTP-01 will be used)
+        
+        # Use staging ACME for testing (switch to production later)
+        acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+        
+        # Production ACME (comment out staging above and uncomment this when ready)
+        # acme_ca https://acme-v02.api.letsencrypt.org/directory
+        
+        admin 0.0.0.0:2019
+        
+        log {
+            level INFO
+            output stdout
+        }
     }
 
+    # Vaultwarden - Password Manager
     passwords.avigdol.com {
-        reverse_proxy vaultwarden.homelab.svc.cluster.local:80
+        reverse_proxy vaultwarden:80
+        
         @websockets {
             header Connection *Upgrade*
             header Upgrade websocket
         }
-        reverse_proxy @websockets vaultwarden.homelab.svc.cluster.local:3012
+        reverse_proxy @websockets vaultwarden:3012
+        
         header {
             Strict-Transport-Security max-age=31536000;
             X-Frame-Options DENY
@@ -30,10 +41,13 @@ data:
         }
     }
 
+    # Nextcloud - File Sync
     files.avigdol.com {
-        reverse_proxy nextcloud.homelab.svc.cluster.local:80
+        reverse_proxy nextcloud:80
+        
         redir /.well-known/carddav /remote.php/dav permanent
         redir /.well-known/caldav /remote.php/dav permanent
+        
         header {
             Strict-Transport-Security max-age=31536000;
             X-Frame-Options SAMEORIGIN
@@ -42,13 +56,16 @@ data:
             Referrer-Policy same-origin
             -Server
         }
+        
         request_body {
             max_size 512MB
         }
     }
 
+    # Jenkins - CI/CD
     jenkins.avigdol.com {
-        reverse_proxy jenkins.homelab.svc.cluster.local:8080
+        reverse_proxy jenkins:8080
+        
         header {
             Strict-Transport-Security max-age=31536000;
             X-XSS-Protection "1; mode=block"
@@ -56,8 +73,10 @@ data:
         }
     }
 
+    # Grafana - Monitoring Dashboard
     monitor.avigdol.com {
-        reverse_proxy grafana.homelab.svc.cluster.local:3000
+        reverse_proxy grafana:3000
+        
         header {
             Strict-Transport-Security max-age=31536000;
             X-Frame-Options SAMEORIGIN

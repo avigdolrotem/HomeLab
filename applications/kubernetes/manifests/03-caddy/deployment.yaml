@@ -17,6 +17,7 @@ spec:
     spec:
       containers:
       - name: caddy
+        # Keep your Route53 image
         image: caddy:2.8.4-alpine
         ports:
         - containerPort: 80
@@ -25,6 +26,9 @@ spec:
           name: https
         - containerPort: 2019
           name: admin
+        env:
+        - name: AWS_REGION
+          value: "us-east-1"
         volumeMounts:
         - name: caddyfile
           mountPath: /etc/caddy/Caddyfile
@@ -36,23 +40,28 @@ spec:
           mountPath: /config
         resources:
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 512Mi
           requests:
-            cpu: 50m
-            memory: 64Mi
+            cpu: 200m
+            memory: 256Mi
+        # FIXED: Health checks that work with Caddy admin API
         livenessProbe:
-            httpGet:
-              path: /
-              port: admin
-            initialDelaySeconds: 30
-            periodSeconds: 30
+          httpGet:
+            path: /config/
+            port: 2019
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
         readinessProbe:
-            httpGet:
-              path: /
-              port: admin
-            initialDelaySeconds: 10
-            periodSeconds: 10
+          httpGet:
+            path: /config/
+            port: 2019
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
       volumes:
       - name: caddyfile
         configMap:
