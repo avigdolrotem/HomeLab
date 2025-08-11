@@ -1,4 +1,3 @@
-# applications/kubernetes/manifests/01-caddy/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
