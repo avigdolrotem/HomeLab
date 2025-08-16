@@ -15,6 +15,29 @@
     mode: '0755'
   become: yes
 
+- name: Create mail backup archive
+  shell: |
+    set -euo pipefail
+    TS=$(date +%F)
+    DEST="/tmp/mailserver-backup-${TS}.tar.gz"
+    tar -C /var/lib/docker/volumes \
+      -czf "${DEST}" \
+      maildata/_data \
+      maillogs/_data
+    tar -C "/home/ubuntu/homelab/docker-compose/mailserver" \
+      -rzf "${DEST}" --append config
+    echo "${DEST}"
+  register: mail_archive
+  changed_when: false
+
+- name: Upload mail archive to S3
+  amazon.aws.s3_object:
+    bucket: "{{ backups_bucket }}"
+    object: "backups/{{ ansible_date_time.year }}/{{ '%02d'|format(ansible_date_time.month|int) }}/mailserver-{{ ansible_date_time.date }}.tar.gz"
+    src: "{{ mail_archive.stdout }}"
+    mode: put
+    encrypt: true
+
 - name: Display backup setup completion
   debug:
     msg: "✅ Backup system installed and ready"

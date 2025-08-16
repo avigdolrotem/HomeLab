@@ -1,0 +1,102 @@
+
+- set_fact:
+    apps_root: "/home/ubuntu/homelab"
+    mail_root: "/home/ubuntu/homelab/docker-compose/mailserver"
+
+- name: Ensure mailserver directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - "{{ mail_root }}/config/opendkim/keys/{{ root_domain | default('avigdol.com') }}"
+    - "{{ mail_root }}/env"
+    - "{{ mail_root }}/certs"
+
+- name: Render mailserver env file
+  template:
+    src: mailserver.env.j2
+    dest: "{{ mail_root }}/env/mailserver.env"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0640"
+
+# FIX: Create the secret with a non-empty JSON string so AWS doesn't reject it
+- name: Ensure Secrets Manager secret for mail accounts exists
+  community.aws.secretsmanager_secret:
+    name: homelab-dev-mail-accounts
+    region: us-east-1
+    state: present
+    description: Mail accounts for docker-mailserver
+    secret_type: string
+    secret: "{}"
+  register: mail_secret
+
+# Seed only on first creation
+- name: Seed mail accounts if secret was just created (first run)
+  when: mail_secret.changed
+  community.aws.secretsmanager_secret:
+    name: homelab-dev-mail-accounts
+    region: us-east-1
+    secret_type: string
+    secret: |
+      {"accounts":[
+        {"email":"admin@{{ root_domain | default('avigdol.com') }}","password":"{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"},
+        {"email":"dmarc@{{ root_domain | default('avigdol.com') }}","password":"{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"},
+        {"email":"tlsrpt@{{ root_domain | default('avigdol.com') }}","password":"{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"}
+      ]}
+
+- name: Build postfix-accounts.cf from Secrets Manager
+  shell: |
+    set -euo pipefail
+    aws secretsmanager get-secret-value --secret-id homelab-dev-mail-accounts --query SecretString --output text \
+    | jq -r '.accounts[] | "\(.email):\(.password)"' \
+    > "{{ mail_root }}/config/postfix-accounts.cf"
+  args:
+    executable: /bin/bash
+
+# Copy latest certs from Caddy volume into stable filenames for DMS
+# Tries both staging and prod ACME directories
+- name: Sync TLS certs from Caddy volume
+  shell: |
+    set -euo pipefail
+    DOMAIN="{{ mail_fqdn | default('mail.avigdol.com') }}"
+    BASE="/var/lib/docker/volumes/caddy_data/_data/certificates"
+    CRT=$(find "${BASE}" -type f \( -path "*/acme-staging-v02.api.letsencrypt.org-directory/*/${DOMAIN}.crt" -o -path "*/acme-v02.api.letsencrypt.org-directory/*/${DOMAIN}.crt" \) | sort | tail -n1)
+    KEY=$(find "${BASE}" -type f \( -path "*/acme-staging-v02.api.letsencrypt.org-directory/*/${DOMAIN}.key" -o -path "*/acme-v02.api.letsencrypt.org-directory/*/${DOMAIN}.key" \) | sort | tail -n1)
+    install -m 0644 "${CRT}" "{{ mail_root }}/certs/fullchain.pem"
+    install -m 0600 "${KEY}" "{{ mail_root }}/certs/privkey.pem"
+  args:
+    executable: /bin/bash
+  notify: restart mailserver
+
+- name: Read generated DKIM TXT from docker-mailserver
+  slurp:
+    src: "{{ mail_root }}/config/opendkim/keys/{{ root_domain | default('avigdol.com') }}/mail.txt"
+  register: dkim_txt_raw
+
+# Extract selector (e.g., "mail") and TXT value (v=DKIM1; k=rsa; p=...)
+- name: Parse DKIM selector and value
+  set_fact:
+    dkim_txt_str: "{{ dkim_txt_raw.content | b64decode | regex_replace('\\s+', ' ') }}"
+    dkim_selector: "{{ (dkim_txt_raw.content | b64decode | regex_search('([A-Za-z0-9_-]+)\\._domainkey', '\\1')) | default('mail') }}"
+    dkim_value: "{{ (dkim_txt_raw.content | b64decode | regex_replace('\\s+', ' ') | regex_search('\"(v=DKIM1;[^\\\"]+)\"', '\\1')) }}"
+  when: dkim_txt_raw is defined
+
+- name: Publish/Update DKIM TXT record in Route53
+  amazon.aws.route53:
+    zone: "{{ root_domain }}"
+    record: "{{ dkim_selector }}._domainkey.{{ root_domain }}"
+    type: TXT
+    ttl: 300
+    value: "\"{{ dkim_value }}\""
+    overwrite: true
+
+- name: Deploy mail stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ mail_root }}"
+    files: ["docker-compose.mail.yml"]
+    state: present
+    restarted: true

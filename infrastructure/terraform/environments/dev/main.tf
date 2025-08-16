@@ -196,3 +196,11 @@ resource "aws_route53_record" "subdomains" {
   ttl     = 300
   records = [module.ec2.public_ip]
 }
+
+module "mail_dns" {
+  source         = "../../modules/mail_dns"
+  zone_id        = data.aws_route53_zone.main.zone_id
+  root_domain    = var.domain_name
+  dkim_selector  = var.mail_dkim_selector
+  dkim_txt_value = var.mail_dkim_txt_value
+}
