@@ -1,0 +1,7 @@
+# Global defaults for Ansible plays
+root_domain: "avigdol.com"
+mail_fqdn: "mail.avigdol.com"
+backups_bucket: "homelab-backups-874888505976"
+
+# Where applications are copied by your applications role
+apps_root: "/home/ubuntu/homelab"

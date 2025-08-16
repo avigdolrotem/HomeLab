@@ -115,10 +115,29 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Action = [
           "route53:ListHostedZones",
           "route53:GetChange",
-          "route53:ChangeResourceRecordSets"
+          "route53:ChangeResourceRecordSets",
+          "route53:ListResourceRecordSets",   
+          "route53:ListHostedZonesByName"     
         ]
         Resource = "*"
-}
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:CreateSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:TagResource",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:PutResourcePolicy",
+        "secretsmanager:DeleteResourcePolicy"
+        ]
+        "Resource": [
+          "arn:aws:secretsmanager:*:874888505976:secret:homelab-dev-mail-accounts*"
+        ]
+      }
     ]
   })
 }

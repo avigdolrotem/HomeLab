@@ -2,10 +2,10 @@
 {
     # Email for Let's Encrypt
     email admin@avigdol.com
-    
+
     # ACME server (use staging for testing)
     acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
-    
+
     # Production Let's Encrypt (default)
     # acme_ca https://acme-v02.api.letsencrypt.org/directory
 }
@@ -13,29 +13,21 @@
 # Vaultwarden - Password Manager
 passwords.avigdol.com {
     reverse_proxy vaultwarden:80
-    
-    # WebSocket support for notifications
+
     @websockets {
         header Connection *Upgrade*
         header Upgrade websocket
     }
     reverse_proxy @websockets vaultwarden:3012
-    
-    # Security headers
+
     header {
-        # HSTS
         Strict-Transport-Security max-age=31536000;
-        # Prevent clickjacking
         X-Frame-Options DENY
-        # XSS protection
         X-XSS-Protection "1; mode=block"
-        # Content type sniffing
         X-Content-Type-Options nosniff
-        # Referrer policy
         Referrer-Policy same-origin
     }
-    
-    # Logging
+
     log {
         output file /var/log/caddy/passwords.avigdol.com.log {
             roll_size 10mb
@@ -48,33 +40,23 @@ passwords.avigdol.com {
 # Nextcloud - File Sync
 files.avigdol.com {
     reverse_proxy nextcloud:80
-    
-    # Handle well-known paths for CardDAV and CalDAV
+
     redir /.well-known/carddav /remote.php/dav permanent
     redir /.well-known/caldav /remote.php/dav permanent
-    
-    # Security headers for Nextcloud
+
     header {
-        # HSTS
         Strict-Transport-Security max-age=31536000;
-        # Allow framing only from same origin (for embedding)
         X-Frame-Options SAMEORIGIN
-        # XSS protection
         X-XSS-Protection "1; mode=block"
-        # Content type sniffing
         X-Content-Type-Options nosniff
-        # Referrer policy
         Referrer-Policy same-origin
-        # Remove server header
         -Server
     }
-    
-    # Handle large file uploads
+
     request_body {
         max_size 512MB
     }
-    
-    # Logging
+
     log {
         output file /var/log/caddy/files.avigdol.com.log {
             roll_size 10mb
@@ -87,18 +69,13 @@ files.avigdol.com {
 # Jenkins - CI/CD
 jenkins.avigdol.com {
     reverse_proxy jenkins:8080
-    
-    # Security headers
+
     header {
-        # HSTS
         Strict-Transport-Security max-age=31536000;
-        # XSS protection
         X-XSS-Protection "1; mode=block"
-        # Content type sniffing
         X-Content-Type-Options nosniff
     }
-    
-    # Logging
+
     log {
         output file /var/log/caddy/jenkins.avigdol.com.log {
             roll_size 10mb
@@ -111,20 +88,14 @@ jenkins.avigdol.com {
 # Grafana - Monitoring Dashboard
 monitor.avigdol.com {
     reverse_proxy grafana:3000
-    
-    # Security headers
+
     header {
-        # HSTS
         Strict-Transport-Security max-age=31536000;
-        # Allow framing for Grafana panels
         X-Frame-Options SAMEORIGIN
-        # XSS protection
         X-XSS-Protection "1; mode=block"
-        # Content type sniffing
         X-Content-Type-Options nosniff
     }
-    
-    # Logging
+
     log {
         output file /var/log/caddy/monitor.avigdol.com.log {
             roll_size 10mb
@@ -134,21 +105,34 @@ monitor.avigdol.com {
     }
 }
 
-# Mail Management Interface (Optional - Roundcube or similar)
-# mail.avigdol.com {
-#     reverse_proxy mailserver:80
-#     
-#     # Security headers
-#     header {
-#         Strict-Transport-Security max-age=31536000;
-#         X-Frame-Options DENY
-#         X-XSS-Protection "1; mode=block"
-#         X-Content-Type-Options nosniff
-#     }
-# }
+# Webmail (Roundcube)
+webmail.avigdol.com {
+    reverse_proxy webmail:80
+
+    header {
+        Strict-Transport-Security max-age=31536000;
+        X-Frame-Options SAMEORIGIN
+        X-XSS-Protection "1; mode=block"
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+    }
+
+    log {
+        output file /var/log/caddy/webmail.avigdol.com.log {
+            roll_size 10mb
+            roll_keep 5
+            roll_keep_for 720h
+        }
+    }
+}
+
+# Serve MTA-STS policy (required for strict TLS in email)
+mta-sts.avigdol.com {
+    root * /srv/mta-sts
+    file_server
+}
 
 # Caddy Admin API (for internal use only)
-# Comment out in production or restrict access
 :2019 {
     bind 127.0.0.1
 }

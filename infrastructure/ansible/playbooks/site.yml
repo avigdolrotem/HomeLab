@@ -2,15 +2,15 @@
   hosts: all
   become: no
   gather_facts: yes
-  
+
   vars:
     deployment_mode: "{{ deploy_mode | default('docker') }}"
-    
+
   pre_tasks:
     - name: Display deployment mode
       debug:
         msg: "🚀 Deploying in {{ deployment_mode.upper() }} mode"
-    
+
     - name: Get RDS endpoint
       shell: terraform output -raw rds_endpoint
       delegate_to: localhost
@@ -18,19 +18,19 @@
       run_once: true
       args:
         chdir: "{{ playbook_dir }}/../../terraform/environments/dev"
-    
+
     - name: Set RDS endpoint fact
       set_fact:
         rds_endpoint: "{{ rds_endpoint_result.stdout }}"
       run_once: true
-      
+
   roles:
     - role: system      # Base system setup
     - role: docker      # Docker + Docker Compose
     - role: database    # RDS setup and application databases
     - role: minikube    # Kubernetes cluster
     - role: helm        # Helm package manager
-    - role: applications # Deploy apps based on deployment_mode
+    - role: applications # Deploy apps based on deployment_mode (+ mailserver)
     - role: backup      # Backup system
 
   post_tasks:

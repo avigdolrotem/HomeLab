@@ -43,5 +43,8 @@
 - include_tasks: docker-deploy.yml
   when: deployment_mode | default('docker') == 'docker'
 
-- include_tasks: k8s-deploy.yml  
+- include_tasks: k8s-deploy.yml
   when: deployment_mode | default('docker') == 'k8s'
+
+- include_tasks: mailserver.yml
+  when: deployment_mode | default('docker') == 'docker'

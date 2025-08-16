@@ -78,3 +78,15 @@ variable "rds_backup_retention_period" {
   type        = number
   default     = 7
 }
+
+variable "mail_dkim_selector" {
+  description = "DKIM selector (e.g., mail)"
+  type        = string
+  default     = "mail"
+}
+
+variable "mail_dkim_txt_value" {
+  description = "DKIM TXT record value (paste from generated mail.txt)"
+  type        = string
+  default     = ""
+}

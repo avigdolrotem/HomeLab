@@ -21,6 +21,7 @@
       - vim
       - tree
       - python3-pip
+      - python3-boto3
     state: present
     update_cache: yes
     cache_valid_time: 3600

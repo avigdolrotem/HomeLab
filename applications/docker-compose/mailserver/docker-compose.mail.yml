@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  mail:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail
+    domainname: avigdol.com
+    restart: unless-stopped
+    env_file:
+      - ./env/mailserver.env
+    ports:
+      - "25:25"    # SMTP
+      - "587:587"  # Submission (STARTTLS)
+      - "993:993"  # IMAPS
+      # - "995:995" # POP3S (optional)
+    volumes:
+      - maildata:/var/mail
+      - maillogs:/var/log/mail
+      - ./config:/tmp/docker-mailserver
+      - caddy_data:/caddy_certs:ro         # Caddy certs volume (external)
+      - ./certs:/etc/ssl/mail:rw           # Stable filenames for DMS (Ansible syncs)
+    cap_add:
+      - NET_ADMIN
+    stop_grace_period: 1m
+    networks:
+      - homelab
+
+  # Optional Webmail (Roundcube). Comment out if you don't want it.
+  webmail:
+    image: roundcube/roundcubemail:1.6-apache
+    restart: unless-stopped
+    environment:
+      - ROUNDCUBE_DEFAULT_HOST=tls://mail.avigdol.com
+      - ROUNDCUBE_SMTP_SERVER=tls://mail.avigdol.com
+      - ROUNDCUBE_SMTP_PORT=587
+    depends_on:
+      - mail
+    networks:
+      - homelab
+
+volumes:
+  maildata:
+  maillogs:
+  # Must exist in your main compose: the Caddy data volume that holds certificates
+  caddy_data:
+    external: true
+
+networks:
+  homelab:
+    external: true
