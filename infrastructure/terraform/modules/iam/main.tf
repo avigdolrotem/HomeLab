@@ -115,7 +115,9 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Action = [
           "route53:ListHostedZones",
           "route53:GetChange",
-          "route53:ChangeResourceRecordSets"
+          "route53:ChangeResourceRecordSets",
+          "route53:ListResourceRecordSets",   
+          "route53:ListHostedZonesByName"     
         ]
         Resource = "*"
 }

@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
       - name: caddy
-        # Keep your Route53 image
-        image: caddy:2.8.4-alpine
+        image: homelab-caddy-route53:latest
+        imagePullPolicy: Never                       
         ports:
         - containerPort: 80
           name: http
@@ -45,7 +45,6 @@ spec:
           requests:
             cpu: 200m
             memory: 256Mi
-        # FIXED: Health checks that work with Caddy admin API
         livenessProbe:
           httpGet:
             path: /config/

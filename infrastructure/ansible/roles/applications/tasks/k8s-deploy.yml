@@ -51,6 +51,39 @@
       }}
     state: present
 
+- name: Create Caddy build directory
+  file:
+    path: /home/ubuntu/homelab/caddy-build
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy Dockerfile template
+  template:
+    src: Dockerfile.j2
+    dest: /home/ubuntu/homelab/caddy-build/Dockerfile
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Create custom Caddy image with Route53 support
+  community.docker.docker_image:
+    name: homelab-caddy-route53
+    tag: latest
+    build:
+      path: "/home/ubuntu/homelab/caddy-build"
+    source: build
+    state: present
+  become_user: ubuntu
+
+- name: Load custom Caddy image into Minikube
+  command: minikube image load homelab-caddy-route53:latest
+  become_user: ubuntu
+  environment:
+    HOME: /home/ubuntu
+  register: minikube_load_result
+
 - name: Apply Kubernetes manifests in order
   command: kubectl apply -f {{ item }}
   loop:
